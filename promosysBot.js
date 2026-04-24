@@ -8,10 +8,14 @@ async function consultarPromosys(cpf) {
   try {
 
     // 1. login
-    await page.goto('URL_PROMOSYS');
+    await page.goto('URL_PROMOSYS', { waitUntil: 'domcontentloaded' });
+
     await page.fill('#usuario', 'USER');
     await page.fill('#senha', 'PASS');
     await page.click('button[type="submit"]');
+
+    // espera login finalizar
+    await page.waitForTimeout(3000);
 
     // 2. fechar popup (se existir)
     await page.click('button:has-text("Fechar")').catch(() => {});
@@ -32,16 +36,24 @@ async function consultarPromosys(cpf) {
     // 6. buscar
     await page.click('button:has-text("Consultar")');
 
+    // ⏱️ ESPERA A TELA CARREGAR (AJUSTE PRINCIPAL)
+    await page.waitForTimeout(15000);
+
     // 7. pegar margem
-    const margem = await page.textContent('#margem');
+    const margem = await page.textContent('#margem').catch(() => null);
 
     await browser.close();
+
+    // garante retorno válido
+    if (!margem) return 0;
 
     return margem;
 
   } catch (err) {
+
     await browser.close();
     console.log("Erro Promosys:", err);
+
     return 0;
   }
 }
