@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-async function esperar(page, selector, tempo = 8000) {
+async function esperar(page, selector, tempo) {
   try {
     await page.waitForSelector(selector, { timeout: tempo });
   } catch {
@@ -24,21 +24,21 @@ async function consultarPromosys(cpf) {
     });
 
     // =========================
-    // LOGIN
+    // LOGIN (3s)
     // =========================
     console.log("🟡 Login...");
 
-    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]');
+    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 3000);
 
     await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
     await page.fill('input[placeholder="Digite sua senha"]', process.env.PROMOSYS_PASS);
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 8000 });
+    await page.waitForURL('**/consulta/**', { timeout: 3000 });
 
     // =========================
-    // POPUP
+    // POPUP (rápido)
     // =========================
     console.log("🟡 Fechando popup...");
 
@@ -60,20 +60,20 @@ async function consultarPromosys(cpf) {
     console.log("🟢 Popup limpo");
 
     // =========================
-    // INSS
+    // INSS (5s)
     // =========================
     console.log("🔵 Selecionando INSS...");
 
     await page.click('text=INSS', { force: true });
 
-    await esperar(page, 'text=CONSULTA INSS');
+    await esperar(page, 'text=CONSULTA INSS', 5000);
 
     // =========================
-    // CPF
+    // CPF (5s)
     // =========================
     console.log("🟡 Buscando CPF...");
 
-    await esperar(page, 'input[placeholder="CPF / Benefício"]');
+    await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
 
     await page.fill('input[placeholder="CPF / Benefício"]', cpf);
 
@@ -82,9 +82,9 @@ async function consultarPromosys(cpf) {
     await page.click('button:has-text("Consultar")', { force: true });
 
     // =========================
-    // ESPERA RESULTADO
+    // RESULTADO (5s)
     // =========================
-    await esperar(page, 'text=Margem Total Disponível', 8000);
+    await esperar(page, 'text=Margem Total Disponível', 5000);
 
     // =========================
     // CAPTURA DADOS
