@@ -3,6 +3,9 @@ const app = express();
 
 app.use(express.json());
 
+// importa o robô
+const { consultarPromosys } = require('./promosysBot');
+
 // -----------------------------
 // FUNÇÃO DE REGRA DE CRM
 // -----------------------------
@@ -53,16 +56,27 @@ app.post('/webhook', async (req, res) => {
     });
   }
 
-  // 🔴 ainda simulado (depois entra o Promosys)
-  const margemSimulada = 350;
+  try {
 
-  const resposta = montarResposta(cpf, margemSimulada);
+    // 🤖 CHAMA O ROBÔ REAL
+    const margem = await consultarPromosys(cpf);
 
-  return res.json(resposta);
+    const resposta = montarResposta(cpf, margem);
+
+    return res.json(resposta);
+
+  } catch (err) {
+
+    return res.status(500).json({
+      status: "erro",
+      mensagem: "Erro ao consultar sistema",
+      detalhe: err.message
+    });
+  }
 });
 
 // -----------------------------
-// TESTE DO PLAYWRIGHT
+// TESTE PLAYWRIGHT
 // -----------------------------
 app.get('/test-browser', async (req, res) => {
 
