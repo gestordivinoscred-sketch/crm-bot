@@ -1,12 +1,10 @@
 const express = require('express');
 const app = express();
 
+app.use(express.json());
+
 app.get('/', (req, res) => {
   res.send('API rodando 🚀');
-});
-
-app.listen(3199, () => {
-  console.log('Servidor rodando na porta 3199');
 });
 
 app.post('/webhook', (req, res) => {
@@ -16,3 +14,5 @@ app.post('/webhook', (req, res) => {
     cpf: req.body.cpf
   });
 });
+
+app.listen(process.env.PORT || 3199);
