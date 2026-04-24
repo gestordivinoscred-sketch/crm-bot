@@ -33,11 +33,10 @@ async function consultarPromosys(cpf) {
 
     await page.waitForTimeout(1200);
 
-    // tenta fechar no X
     await page.click('text=×').catch(() => {});
     await page.click('[class*="close"]').catch(() => {});
 
-    // REMOVE overlay invisível (🔥 chave do problema)
+    // remove overlay invisível
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
         const style = window.getComputedStyle(el);
@@ -62,25 +61,31 @@ async function consultarPromosys(cpf) {
     console.log("🟢 LOGIN OK");
 
     // =========================
-    // CLICAR INSS (FORÇADO)
+    // CLICAR INSS
     // =========================
     console.log("🔵 Selecionando INSS...");
 
     await page.click('text=INSS', { force: true });
 
-    await page.waitForTimeout(2000);
+    // =========================
+    // AGUARDA TELA CONSULTA
+    // =========================
+    await page.waitForSelector('text=CONSULTA INSS', { timeout: 15000 });
 
     // =========================
     // BUSCAR CPF
     // =========================
     console.log("🟡 Buscando CPF...");
 
-    await page.fill('#cpf', cpf);
-    await page.click('input[value="cpf"]', { force: true });
+    await page.waitForSelector('input[placeholder="CPF / Benefício"]', { timeout: 15000 });
+
+    await page.fill('input[placeholder="CPF / Benefício"]', cpf);
+
+    await page.click('text=CPF / Benefício', { force: true });
 
     await page.click('button:has-text("Consultar")', { force: true });
 
-    // ⏱️ TEMPO REAL DO SISTEMA
+    // ⏱️ tempo real do sistema
     await page.waitForTimeout(15000);
 
     // =========================
