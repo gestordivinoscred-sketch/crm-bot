@@ -21,7 +21,7 @@ async function consultarPromosys(cpf) {
     await page.screenshot({ path: "01-inicial.png", fullPage: true });
 
     // =========================
-    // LOGIN CORRETO (PLACEHOLDER)
+    // LOGIN
     // =========================
     console.log("🟡 Preenchendo login...");
 
@@ -37,7 +37,29 @@ async function consultarPromosys(cpf) {
 
     await page.click('text=Acessar o sistema');
 
+    await page.waitForTimeout(5000);
+
     await page.screenshot({ path: "02-pos-login.png", fullPage: true });
+
+    // =========================
+    // FECHAR POPUP (FORTE)
+    // =========================
+    console.log("🟡 Tentando fechar popup...");
+
+    await page.keyboard.press('Escape').catch(() => {});
+
+    for (let i = 0; i < 5; i++) {
+      await page.click('button:has-text("Fechar")').catch(() => {});
+      await page.waitForTimeout(1000);
+    }
+
+    await page.mouse.click(10, 10).catch(() => {});
+
+    await page.waitForTimeout(3000);
+
+    await page.screenshot({ path: "03-pos-popup.png", fullPage: true });
+
+    console.log("🟢 Popup tratado");
 
     // =========================
     // VALIDA LOGIN
@@ -46,12 +68,7 @@ async function consultarPromosys(cpf) {
 
     console.log("🟢 LOGIN OK");
 
-    await page.screenshot({ path: "03-logado.png", fullPage: true });
-
-    await page.waitForTimeout(2000);
-
-    // fecha popup se tiver
-    await page.click('button:has-text("Fechar")').catch(() => {});
+    await page.screenshot({ path: "04-logado.png", fullPage: true });
 
     // =========================
     // NAVEGAÇÃO
@@ -62,7 +79,9 @@ async function consultarPromosys(cpf) {
     await page.click('text=INSS');
     await page.click('text=Consulta INSS');
 
-    await page.screenshot({ path: "04-consulta.png", fullPage: true });
+    await page.waitForTimeout(3000);
+
+    await page.screenshot({ path: "05-consulta.png", fullPage: true });
 
     // =========================
     // BUSCA CPF
@@ -74,10 +93,10 @@ async function consultarPromosys(cpf) {
 
     await page.click('button:has-text("Consultar")');
 
-    // ⏱️ espera resultado carregar
+    // ⏱️ espera resultado
     await page.waitForTimeout(15000);
 
-    await page.screenshot({ path: "05-resultado.png", fullPage: true });
+    await page.screenshot({ path: "06-resultado.png", fullPage: true });
 
     // =========================
     // CAPTURA MARGEM
