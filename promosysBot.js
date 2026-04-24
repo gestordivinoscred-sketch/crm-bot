@@ -13,21 +13,23 @@ async function consultarPromosys(cpf) {
     console.log("🔵 Abrindo sistema...");
 
     await page.goto('https://sistemapromosys.com.br/', {
-      waitUntil: 'networkidle'
+      waitUntil: 'domcontentloaded'
     });
+
+    await page.waitForTimeout(5000);
 
     await page.screenshot({ path: "01-inicial.png", fullPage: true });
 
     // =========================
-    // LOGIN (GENÉRICO E FORTE)
+    // LOGIN CORRETO (PLACEHOLDER)
     // =========================
     console.log("🟡 Preenchendo login...");
 
-    await page.waitForSelector('input[type="text"]', { timeout: 15000 });
-    await page.waitForSelector('input[type="password"]', { timeout: 15000 });
+    await page.waitForSelector('input[placeholder="Digite seu nome de usuário"]', { timeout: 15000 });
+    await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
 
-    await page.fill('input[type="text"]', process.env.PROMOSYS_USER);
-    await page.fill('input[type="password"]', process.env.PROMOSYS_PASS);
+    await page.waitForSelector('input[placeholder="Digite sua senha"]', { timeout: 15000 });
+    await page.fill('input[placeholder="Digite sua senha"]', process.env.PROMOSYS_PASS);
 
     await page.waitForTimeout(2000);
 
@@ -48,7 +50,7 @@ async function consultarPromosys(cpf) {
 
     await page.waitForTimeout(2000);
 
-    // popup (se tiver)
+    // fecha popup se tiver
     await page.click('button:has-text("Fechar")').catch(() => {});
 
     // =========================
@@ -72,7 +74,7 @@ async function consultarPromosys(cpf) {
 
     await page.click('button:has-text("Consultar")');
 
-    // espera carregar resultado
+    // ⏱️ espera resultado carregar
     await page.waitForTimeout(15000);
 
     await page.screenshot({ path: "05-resultado.png", fullPage: true });
