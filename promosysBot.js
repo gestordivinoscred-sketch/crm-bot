@@ -10,11 +10,13 @@ async function consultarPromosys(cpf) {
     // 1. login
     await page.goto('URL_PROMOSYS', { waitUntil: 'domcontentloaded' });
 
-    await page.fill('#usuario', 'USER');
-    await page.fill('#senha', 'PASS');
-    await page.click('button[type="submit"]');
+    await page.fill('#usuario', process.env.PROMOSYS_USER);
+    await page.fill('#senha', process.env.PROMOSYS_PASS);
 
-    // espera login finalizar
+    await page.click('text=Acessar o sistema');
+
+    // espera login estabilizar
+    await page.waitForLoadState('networkidle');
     await page.waitForTimeout(3000);
 
     // 2. fechar popup (se existir)
@@ -30,21 +32,21 @@ async function consultarPromosys(cpf) {
     // 5. CPF
     await page.fill('#cpf', cpf);
 
-    // tipo CPF
+    // tipo CPF/BENEFÍCIO
     await page.click('input[value="cpf"]');
 
     // 6. buscar
     await page.click('button:has-text("Consultar")');
 
-    // ⏱️ ESPERA A TELA CARREGAR (AJUSTE PRINCIPAL)
+    // ⏱️ espera carregamento da resposta (tela do cliente)
     await page.waitForTimeout(15000);
 
-    // 7. pegar margem
+    // 7. captura margem
     const margem = await page.textContent('#margem').catch(() => null);
 
     await browser.close();
 
-    // garante retorno válido
+    // fallback seguro
     if (!margem) return 0;
 
     return margem;
