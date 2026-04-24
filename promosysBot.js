@@ -27,7 +27,7 @@ async function consultarPromosys(cpf) {
     await page.click('text=Acessar o sistema');
 
     // =========================
-    // FECHAR POPUP + LIMPAR OVERLAY
+    // FECHAR POPUP + OVERLAY
     // =========================
     console.log("🟡 Fechando popup...");
 
@@ -51,7 +51,7 @@ async function consultarPromosys(cpf) {
 
     await page.waitForTimeout(500);
 
-    console.log("🟢 Popup realmente limpo");
+    console.log("🟢 Popup limpo");
 
     // =========================
     // VALIDA LOGIN
@@ -61,19 +61,16 @@ async function consultarPromosys(cpf) {
     console.log("🟢 LOGIN OK");
 
     // =========================
-    // CLICAR INSS
+    // INSS
     // =========================
     console.log("🔵 Selecionando INSS...");
 
     await page.click('text=INSS', { force: true });
 
-    // =========================
-    // AGUARDA TELA CONSULTA
-    // =========================
     await page.waitForSelector('text=CONSULTA INSS', { timeout: 15000 });
 
     // =========================
-    // BUSCAR CPF
+    // CPF
     // =========================
     console.log("🟡 Buscando CPF...");
 
@@ -85,26 +82,60 @@ async function consultarPromosys(cpf) {
 
     await page.click('button:has-text("Consultar")', { force: true });
 
-    // ⏱️ tempo real do sistema
+    // tempo real de carregamento
     await page.waitForTimeout(15000);
 
     // =========================
-    // CAPTURAR MARGEM
+    // CAPTURA DADOS
     // =========================
-    console.log("🟠 Capturando margem...");
+    console.log("🟠 Capturando dados...");
 
-    const margem = await page.textContent('#margem').catch(() => null);
+    // pega topo (nome)
+    const textoTopo = await page.locator('body').innerText();
 
-    await browser.close();
+    let nome = "Não encontrado";
 
-    if (!margem) {
-      console.log("⚠️ Margem não encontrada");
+    const matchNome = textoTopo.match(/Nome:\s*(.*)/);
+
+    if (matchNome) {
+      nome = matchNome[1].split('\n')[0].trim();
+    }
+
+    console.log("👤 Nome:", nome);
+
+    // scroll até margens
+    await page.mouse.wheel(0, 2000);
+    await page.waitForTimeout(2000);
+
+    const texto = await page.locator('body').innerText();
+
+    function extrairValor(label) {
+      const regex = new RegExp(label + "\\s*R\\$\\s?([\\d.,]+)");
+      const match = texto.match(regex);
+
+      if (match) {
+        return parseFloat(match[1].replace('.', '').replace(',', '.'));
+      }
+
       return 0;
     }
 
-    console.log("✅ Margem encontrada:", margem);
+    const margem = extrairValor("Margem Total Disponível");
+    const rmc = extrairValor("Margem Disponível RMC");
+    const rcc = extrairValor("Margem Disponível RCC");
 
-    return margem;
+    console.log("💰 Margem:", margem);
+    console.log("💳 RMC:", rmc);
+    console.log("🏦 RCC:", rcc);
+
+    await browser.close();
+
+    return {
+      nome,
+      margem,
+      rmc,
+      rcc
+    };
 
   } catch (err) {
 
@@ -112,7 +143,12 @@ async function consultarPromosys(cpf) {
 
     console.log("❌ ERRO NO BOT:", err.message);
 
-    return 0;
+    return {
+      nome: null,
+      margem: 0,
+      rmc: 0,
+      rcc: 0
+    };
   }
 }
 
