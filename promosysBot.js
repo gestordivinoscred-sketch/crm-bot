@@ -16,46 +16,33 @@ async function consultarPromosys(cpf) {
       waitUntil: 'domcontentloaded'
     });
 
-    await page.waitForTimeout(5000);
-
     await page.screenshot({ path: "01-inicial.png", fullPage: true });
 
     // =========================
-    // LOGIN
+    // LOGIN (RÁPIDO)
     // =========================
-    console.log("🟡 Preenchendo login...");
+    console.log("🟡 Login...");
 
-    await page.waitForSelector('input[placeholder="Digite seu nome de usuário"]', { timeout: 15000 });
     await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
-
-    await page.waitForSelector('input[placeholder="Digite sua senha"]', { timeout: 15000 });
     await page.fill('input[placeholder="Digite sua senha"]', process.env.PROMOSYS_PASS);
 
-    await page.waitForTimeout(2000);
-
-    console.log("🟠 Clicando em acessar...");
-
     await page.click('text=Acessar o sistema');
-
-    await page.waitForTimeout(5000);
 
     await page.screenshot({ path: "02-pos-login.png", fullPage: true });
 
     // =========================
-    // FECHAR POPUP (FORTE)
+    // FECHAR POPUP (X REAL)
     // =========================
-    console.log("🟡 Tentando fechar popup...");
-
-    await page.keyboard.press('Escape').catch(() => {});
-
-    for (let i = 0; i < 5; i++) {
-      await page.click('button:has-text("Fechar")').catch(() => {});
-      await page.waitForTimeout(1000);
-    }
-
-    await page.mouse.click(10, 10).catch(() => {});
+    console.log("🟡 Fechando popup...");
 
     await page.waitForTimeout(3000);
+
+    // botão X (principal)
+    await page.click('button:has-text("×")').catch(() => {});
+    await page.click('text=×').catch(() => {});
+    await page.locator('[class*="close"]').click().catch(() => {});
+
+    await page.waitForTimeout(2000);
 
     await page.screenshot({ path: "03-pos-popup.png", fullPage: true });
 
@@ -64,7 +51,7 @@ async function consultarPromosys(cpf) {
     // =========================
     // VALIDA LOGIN
     // =========================
-    await page.waitForSelector('text=ATENDIMENTO', { timeout: 15000 });
+    await page.waitForSelector('text=ATENDIMENTO', { timeout: 10000 });
 
     console.log("🟢 LOGIN OK");
 
@@ -79,8 +66,6 @@ async function consultarPromosys(cpf) {
     await page.click('text=INSS');
     await page.click('text=Consulta INSS');
 
-    await page.waitForTimeout(3000);
-
     await page.screenshot({ path: "05-consulta.png", fullPage: true });
 
     // =========================
@@ -93,7 +78,7 @@ async function consultarPromosys(cpf) {
 
     await page.click('button:has-text("Consultar")');
 
-    // ⏱️ espera resultado
+    // ⏱️ mantém delay aqui (importante)
     await page.waitForTimeout(15000);
 
     await page.screenshot({ path: "06-resultado.png", fullPage: true });
