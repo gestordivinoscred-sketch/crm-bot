@@ -10,5 +10,9 @@ app.listen(3199, () => {
 });
 
 app.post('/webhook', (req, res) => {
-  res.send('nome recebido!');
+  res.json({
+    status: "ok",
+    mensagem: "CPF recebido",
+    cpf: req.body.cpf
+  });
 });
