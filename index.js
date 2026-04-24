@@ -9,6 +9,6 @@ app.listen(3199, () => {
   console.log('Servidor rodando na porta 3199');
 });
 
-app.post('/webhook'(req, res)  => {
+app.post('/webhook', (req, res) => {
   res.send('nome recebido!');
 });
