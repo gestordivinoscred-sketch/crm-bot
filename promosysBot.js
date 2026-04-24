@@ -2,35 +2,48 @@ const { chromium } = require('playwright');
 
 async function consultarPromosys(cpf) {
 
-  const browser = await chromium.launch({
-    headless: true // invisível no servidor
-  });
-
+  const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
 
-  // 1. entrar no sistema
-  await page.goto('URL_DO_PROMOSYS_LOGIN');
+  try {
 
-  // 2. login (AJUSTAR SELETOR REAL)
-  await page.fill('#usuario', 'SEU_LOGIN');
-  await page.fill('#senha', 'SUA_SENHA');
-  await page.click('button[type="submit"]');
+    // 1. login
+    await page.goto('URL_PROMOSYS');
+    await page.fill('#usuario', 'USER');
+    await page.fill('#senha', 'PASS');
+    await page.click('button[type="submit"]');
 
-  // 3. esperar carregar
-  await page.waitForTimeout(3000);
+    // 2. fechar popup (se existir)
+    await page.click('button:has-text("Fechar")').catch(() => {});
 
-  // 4. buscar CPF (AJUSTAR DEPOIS)
-  await page.fill('#cpf', cpf);
-  await page.click('#buscar');
+    // 3. atendimento
+    await page.click('text=ATENDIMENTO');
+    await page.click('text=INSS');
 
-  await page.waitForTimeout(2000);
+    // 4. consulta
+    await page.click('text=Consulta INSS');
 
-  // 5. capturar margem (AJUSTAR SELETOR REAL)
-  const margemTexto = await page.textContent('#margem');
+    // 5. CPF
+    await page.fill('#cpf', cpf);
 
-  await browser.close();
+    // tipo CPF
+    await page.click('input[value="cpf"]');
 
-  return margemTexto;
+    // 6. buscar
+    await page.click('button:has-text("Consultar")');
+
+    // 7. pegar margem
+    const margem = await page.textContent('#margem');
+
+    await browser.close();
+
+    return margem;
+
+  } catch (err) {
+    await browser.close();
+    console.log("Erro Promosys:", err);
+    return 0;
+  }
 }
 
 module.exports = { consultarPromosys };
