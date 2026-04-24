@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 async function consultarPromosys(cpf) {
 
   const browser = await chromium.launch({
-    headless: false,   // 👀 deixa visível pra você ver o robô
+    headless: true,   // 👀 deixa visível pra você ver o robô
     slowMo: 200        // 🐢 desacelera ações
   });
 
