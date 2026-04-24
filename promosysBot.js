@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 async function consultarPromosys(cpf) {
 
   const browser = await chromium.launch({
-    headless: true // 🔒 servidor (Coolify)
+    headless: true
   });
 
   const page = await browser.newPage();
@@ -18,14 +18,16 @@ async function consultarPromosys(cpf) {
 
     await page.screenshot({ path: "01-inicial.png", fullPage: true });
 
-    // espera login
-    await page.waitForSelector('#usuario', { timeout: 15000 });
-    await page.waitForSelector('#senha', { timeout: 15000 });
-
+    // =========================
+    // LOGIN (GENÉRICO E FORTE)
+    // =========================
     console.log("🟡 Preenchendo login...");
 
-    await page.fill('#usuario', process.env.PROMOSYS_USER);
-    await page.fill('#senha', process.env.PROMOSYS_PASS);
+    await page.waitForSelector('input[type="text"]', { timeout: 15000 });
+    await page.waitForSelector('input[type="password"]', { timeout: 15000 });
+
+    await page.fill('input[type="text"]', process.env.PROMOSYS_USER);
+    await page.fill('input[type="password"]', process.env.PROMOSYS_PASS);
 
     await page.waitForTimeout(2000);
 
@@ -33,9 +35,11 @@ async function consultarPromosys(cpf) {
 
     await page.click('text=Acessar o sistema');
 
-    await page.screenshot({ path: "02-pos-click.png", fullPage: true });
+    await page.screenshot({ path: "02-pos-login.png", fullPage: true });
 
-    // 🔥 valida login real
+    // =========================
+    // VALIDA LOGIN
+    // =========================
     await page.waitForSelector('text=ATENDIMENTO', { timeout: 15000 });
 
     console.log("🟢 LOGIN OK");
@@ -44,9 +48,12 @@ async function consultarPromosys(cpf) {
 
     await page.waitForTimeout(2000);
 
-    // popup
+    // popup (se tiver)
     await page.click('button:has-text("Fechar")').catch(() => {});
 
+    // =========================
+    // NAVEGAÇÃO
+    // =========================
     console.log("🔵 Indo para consulta...");
 
     await page.click('text=ATENDIMENTO');
@@ -55,6 +62,9 @@ async function consultarPromosys(cpf) {
 
     await page.screenshot({ path: "04-consulta.png", fullPage: true });
 
+    // =========================
+    // BUSCA CPF
+    // =========================
     console.log("🟡 Buscando CPF...");
 
     await page.fill('#cpf', cpf);
@@ -62,11 +72,14 @@ async function consultarPromosys(cpf) {
 
     await page.click('button:has-text("Consultar")');
 
-    // ⏱️ espera resultado
+    // espera carregar resultado
     await page.waitForTimeout(15000);
 
     await page.screenshot({ path: "05-resultado.png", fullPage: true });
 
+    // =========================
+    // CAPTURA MARGEM
+    // =========================
     console.log("🟠 Capturando margem...");
 
     const margem = await page.textContent('#margem').catch(() => null);
