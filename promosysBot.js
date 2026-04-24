@@ -27,50 +27,64 @@ async function consultarPromosys(cpf) {
     await page.click('text=Acessar o sistema');
 
     // =========================
-    // FECHAR POPUP (RÁPIDO)
+    // FECHAR POPUP + LIMPAR OVERLAY
     // =========================
     console.log("🟡 Fechando popup...");
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1200);
 
+    // tenta fechar no X
     await page.click('text=×').catch(() => {});
     await page.click('[class*="close"]').catch(() => {});
 
-    await page.waitForTimeout(1000);
+    // REMOVE overlay invisível (🔥 chave do problema)
+    await page.evaluate(() => {
+      document.querySelectorAll('div').forEach(el => {
+        const style = window.getComputedStyle(el);
+        if (
+          (style.position === 'fixed' || style.position === 'absolute') &&
+          parseInt(style.zIndex) > 1000
+        ) {
+          el.remove();
+        }
+      });
+    });
 
-    console.log("🟢 Popup fechado");
+    await page.waitForTimeout(500);
+
+    console.log("🟢 Popup realmente limpo");
 
     // =========================
-    // VALIDAÇÃO (URL)
+    // VALIDA LOGIN
     // =========================
     await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
     console.log("🟢 LOGIN OK");
 
     // =========================
-    // ESCOLHER CONVÊNIO
+    // CLICAR INSS (FORÇADO)
     // =========================
     console.log("🔵 Selecionando INSS...");
 
-    await page.click('text=INSS');
+    await page.click('text=INSS', { force: true });
 
     await page.waitForTimeout(2000);
 
     // =========================
-    // BUSCA CPF
+    // BUSCAR CPF
     // =========================
     console.log("🟡 Buscando CPF...");
 
     await page.fill('#cpf', cpf);
-    await page.click('input[value="cpf"]');
+    await page.click('input[value="cpf"]', { force: true });
 
-    await page.click('button:has-text("Consultar")');
+    await page.click('button:has-text("Consultar")', { force: true });
 
-    // ⏱️ espera resultado (ESSENCIAL)
+    // ⏱️ TEMPO REAL DO SISTEMA
     await page.waitForTimeout(15000);
 
     // =========================
-    // CAPTURA MARGEM
+    // CAPTURAR MARGEM
     // =========================
     console.log("🟠 Capturando margem...");
 
