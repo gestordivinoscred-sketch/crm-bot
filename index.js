@@ -3,14 +3,13 @@ const app = express();
 
 app.use(express.json());
 
-/**
- * Função que monta a resposta do CRM
- */
+// -----------------------------
+// FUNÇÃO DE REGRA DE CRM
+// -----------------------------
 function montarResposta(cpf, margem) {
 
   const valor = Number(margem);
 
-  // margem positiva
   if (valor > 0) {
     return {
       status: "ok",
@@ -21,7 +20,6 @@ function montarResposta(cpf, margem) {
     };
   }
 
-  // margem negativa
   if (valor < 0) {
     return {
       status: "ok",
@@ -32,7 +30,6 @@ function montarResposta(cpf, margem) {
     };
   }
 
-  // zero
   return {
     status: "ok",
     cpf,
@@ -42,9 +39,9 @@ function montarResposta(cpf, margem) {
   };
 }
 
-/**
- * WEBHOOK principal (n8n / Postman)
- */
+// -----------------------------
+// WEBHOOK (N8N / POSTMAN)
+// -----------------------------
 app.post('/webhook', async (req, res) => {
 
   const cpf = req.body.cpf;
@@ -56,8 +53,7 @@ app.post('/webhook', async (req, res) => {
     });
   }
 
-  // 🔴 POR ENQUANTO SIMULADO
-  // depois isso vira Playwright no Promosys
+  // 🔴 ainda simulado (depois entra o Promosys)
   const margemSimulada = 350;
 
   const resposta = montarResposta(cpf, margemSimulada);
@@ -65,16 +61,37 @@ app.post('/webhook', async (req, res) => {
   return res.json(resposta);
 });
 
-/**
- * teste simples da API
- */
-app.get('/', (req, res) => {
-  res.send('API rodando 🚀');
+// -----------------------------
+// TESTE DO PLAYWRIGHT
+// -----------------------------
+app.get('/test-browser', async (req, res) => {
+
+  try {
+    const { chromium } = require('playwright');
+
+    const browser = await chromium.launch({
+      headless: true
+    });
+
+    await browser.close();
+
+    return res.json({
+      status: "ok",
+      mensagem: "Playwright funcionando no Coolify 🚀"
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      status: "erro",
+      mensagem: err.message
+    });
+  }
 });
 
-/**
- * inicia servidor
- */
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Servidor rodando 🚀');
+// -----------------------------
+// SERVIDOR
+// -----------------------------
+app.listen(process.env.PORT || 3199, () => {
+  console.log('API rodando 🚀');
 });
