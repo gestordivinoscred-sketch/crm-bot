@@ -2,51 +2,58 @@ const { chromium } = require('playwright');
 
 async function consultarPromosys(cpf) {
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: false,   // 👀 deixa visível pra você ver o robô
+    slowMo: 200        // 🐢 desacelera ações
+  });
+
   const page = await browser.newPage();
 
   try {
 
-    // 1. login
-    await page.goto('URL_PROMOSYS', { waitUntil: 'domcontentloaded' });
+    // 1. abre sistema
+    await page.goto('URL_PROMOSYS', { waitUntil: 'networkidle' });
 
+    // espera login aparecer
+    await page.waitForSelector('#usuario', { timeout: 15000 });
+    await page.waitForSelector('#senha', { timeout: 15000 });
+
+    // preenche login
     await page.fill('#usuario', process.env.PROMOSYS_USER);
     await page.fill('#senha', process.env.PROMOSYS_PASS);
 
+    // 🟡 delay só antes do botão acessar
+    await page.waitForTimeout(2000);
+
+    // login
     await page.click('text=Acessar o sistema');
 
-    // espera login estabilizar
+    // espera entrar no sistema
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(3000);
 
-    // 2. fechar popup (se existir)
+    // 2. fecha popup se existir
     await page.click('button:has-text("Fechar")').catch(() => {});
 
-    // 3. atendimento
+    // 3. navegação
     await page.click('text=ATENDIMENTO');
     await page.click('text=INSS');
 
-    // 4. consulta
-    await page.click('text=Consulta INSS');
-
-    // 5. CPF
+    // 4. consulta CPF
     await page.fill('#cpf', cpf);
-
-    // tipo CPF/BENEFÍCIO
     await page.click('input[value="cpf"]');
 
-    // 6. buscar
+    // 5. busca
     await page.click('button:has-text("Consultar")');
 
-    // ⏱️ espera carregamento da resposta (tela do cliente)
+    // ⏱ espera resultado carregar
     await page.waitForTimeout(15000);
 
-    // 7. captura margem
+    // 6. captura margem (ajustar depois se necessário)
     const margem = await page.textContent('#margem').catch(() => null);
 
     await browser.close();
 
-    // fallback seguro
     if (!margem) return 0;
 
     return margem;
