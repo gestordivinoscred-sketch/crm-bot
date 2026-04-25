@@ -7,43 +7,7 @@ app.use(express.json());
 const { consultarPromosys } = require('./promosysBot');
 
 // -----------------------------
-// FUNÇÃO DE REGRA DE CRM
-// -----------------------------
-function montarResposta(cpf, margem) {
-
-  const valor = Number(margem);
-
-  if (valor > 0) {
-    return {
-      status: "ok",
-      cpf,
-      mensagem: `Cliente tem R$ ${valor.toFixed(2)} de margem`,
-      tipo: "positiva",
-      margem: valor
-    };
-  }
-
-  if (valor < 0) {
-    return {
-      status: "ok",
-      cpf,
-      mensagem: `Cliente com margem negativa de R$ ${valor.toFixed(2)}`,
-      tipo: "negativa",
-      margem: valor
-    };
-  }
-
-  return {
-    status: "ok",
-    cpf,
-    mensagem: "Cliente sem margem",
-    tipo: "zero",
-    margem: 0
-  };
-}
-
-// -----------------------------
-// WEBHOOK (N8N / POSTMAN)
+// WEBHOOK (N8N / POSTMAN / IA TOOL)
 // -----------------------------
 app.post('/webhook', async (req, res) => {
 
@@ -58,18 +22,30 @@ app.post('/webhook', async (req, res) => {
 
   try {
 
-    // 🤖 CHAMA O ROBÔ REAL
+    // 🤖 CHAMA O ROBÔ (AGORA RETORNA OBJETO COMPLETO)
     const dados = await consultarPromosys(cpf);
 
-    // 🔥 CORREÇÃO CRÍTICA AQUI
-    const resposta = montarResposta(cpf, dados.margem);
+    // -----------------------------
+    // RESPOSTA FINAL PADRONIZADA
+    // -----------------------------
+    const resposta = {
+      status: "ok",
+      cpf,
 
-    return res.json({
-      ...resposta,
-      nome: dados.nome,
-      rmc: dados.rmc,
-      rcc: dados.rcc
-    });
+      nome: dados.nome || "",
+      margem: Number(dados.margem || 0),
+      rmc: Number(dados.rmc || 0),
+      rcc: Number(dados.rcc || 0),
+
+      contratos: Number(dados.contratos || 0),
+      bancos: dados.bancos || [],
+      parcelasAltas: dados.parcelasAltas || [],
+
+      // 👇 resposta já pronta pra IA (HUMANA)
+      mensagem: gerarMensagemHumana(dados)
+    };
+
+    return res.json(resposta);
 
   } catch (err) {
 
@@ -80,6 +56,27 @@ app.post('/webhook', async (req, res) => {
     });
   }
 });
+
+// -----------------------------
+// 🧠 GERADOR DE TEXTO HUMANO (IA FRIENDLY)
+// -----------------------------
+function gerarMensagemHumana(dados) {
+
+  const nome = dados.nome || "cliente";
+
+  const margem = Number(dados.margem || 0);
+
+  const temMargem = margem > 0;
+
+  return `Este CPF pertence a ${nome}. ` +
+    (temMargem
+      ? `No momento, ele possui uma margem consignável de R$ ${margem}. `
+      : `No momento, ele não possui margem consignável disponível. `) +
+
+    `Não possui margem de cartão consignado (RMC) e não possui margem de cartão benefício (RCC). ` +
+
+    `O cliente possui ${dados.contratos || 0} contratos ativos.`;
+}
 
 // -----------------------------
 // TESTE PLAYWRIGHT
