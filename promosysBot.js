@@ -12,9 +12,7 @@ async function init() {
 
   console.log("🔐 Iniciando browser e login...");
 
-  browser = await chromium.launch({
-    headless: true
-  });
+  browser = await chromium.launch({ headless: true });
 
   page = await browser.newPage();
 
@@ -35,6 +33,31 @@ async function init() {
 }
 
 // =========================
+// GARANTIR TELA CORRETA (🔥 NOVO)
+// =========================
+async function prepararConsulta() {
+
+  console.log("🧭 Preparando tela de consulta...");
+
+  await page.goto('https://sistemapromosys.com.br/consulta', {
+    waitUntil: 'domcontentloaded'
+  });
+
+  await page.waitForTimeout(1000);
+
+  // garante INSS ativo
+  try {
+    await page.click('text=INSS', { timeout: 5000 });
+  } catch {}
+
+  await page.waitForSelector('input[placeholder="CPF / Benefício"]', {
+    timeout: 15000
+  });
+
+  console.log("🟢 Tela pronta");
+}
+
+// =========================
 // CHECAR SESSÃO
 // =========================
 async function checkSession() {
@@ -44,6 +67,7 @@ async function checkSession() {
     console.log("🔴 Sessão expirada, relogando...");
     logado = false;
     await init();
+    await prepararConsulta(); // 🔥 ESSA É A CORREÇÃO
   }
 }
 
@@ -57,18 +81,11 @@ async function consultarPromosys(cpf) {
     await init();
     await checkSession();
 
+    // 🔥 GARANTE SEMPRE TELA CERTA
+    await prepararConsulta();
+
     console.log("🔵 Consultando CPF:", cpf);
 
-    // =========================
-    // ABRE INSS
-    // =========================
-    await page.click('text=INSS', { force: true });
-
-    await page.waitForSelector('input[placeholder="CPF / Benefício"]', { timeout: 5000 });
-
-    // =========================
-    // CPF
-    // =========================
     await page.fill('input[placeholder="CPF / Benefício"]', cpf);
 
     await page.click('button:has-text("Consultar")', { force: true });
@@ -77,14 +94,8 @@ async function consultarPromosys(cpf) {
 
     await page.waitForTimeout(3000);
 
-    // =========================
-    // CAPTURA SEGURA
-    // =========================
     const texto = await page.evaluate(() => document.body.innerText);
 
-    // =========================
-    // NOME
-    // =========================
     let nome = "Não encontrado";
 
     const matchNome = texto.match(/Nome\s*[:\-]?\s*(.+)/i);
@@ -92,9 +103,6 @@ async function consultarPromosys(cpf) {
       nome = matchNome[1].split('\n')[0].trim();
     }
 
-    // =========================
-    // EXTRATOR MAIS ESTÁVEL
-    // =========================
     function extrair(label) {
       const regex = new RegExp(label + ".*?([\\d.,]+)", "i");
       const match = texto.match(regex);
@@ -117,12 +125,7 @@ async function consultarPromosys(cpf) {
     console.log("💳 RMC:", rmc);
     console.log("🏦 RCC:", rcc);
 
-    return {
-      nome,
-      margem,
-      rmc,
-      rcc
-    };
+    return { nome, margem, rmc, rcc };
 
   } catch (err) {
 
