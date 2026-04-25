@@ -8,7 +8,7 @@ async function esperar(page, selector, tempo) {
   }
 }
 
-async function consultarPromosys(cpf) {
+async function consultarPromosys(cpf, limiteParcela = 50) {
 
   const browser = await chromium.launch({
     headless: true
@@ -24,7 +24,7 @@ async function consultarPromosys(cpf) {
     });
 
     // =========================
-    // LOGIN (3s)
+    // LOGIN
     // =========================
     console.log("🟡 Login...");
 
@@ -38,7 +38,7 @@ async function consultarPromosys(cpf) {
     await page.waitForURL('**/consulta/**', { timeout: 3000 });
 
     // =========================
-    // POPUP (rápido)
+    // POPUP
     // =========================
     console.log("🟡 Fechando popup...");
 
@@ -60,7 +60,7 @@ async function consultarPromosys(cpf) {
     console.log("🟢 Popup limpo");
 
     // =========================
-    // INSS (5s)
+    // INSS
     // =========================
     console.log("🔵 Selecionando INSS...");
 
@@ -69,7 +69,7 @@ async function consultarPromosys(cpf) {
     await esperar(page, 'text=CONSULTA INSS', 5000);
 
     // =========================
-    // CPF (5s)
+    // CPF
     // =========================
     console.log("🟡 Buscando CPF...");
 
@@ -77,12 +77,10 @@ async function consultarPromosys(cpf) {
 
     await page.fill('input[placeholder="CPF / Benefício"]', cpf);
 
-    await page.click('text=CPF / Benefício', { force: true });
-
     await page.click('button:has-text("Consultar")', { force: true });
 
     // =========================
-    // RESULTADO (5s)
+    // RESULTADO
     // =========================
     await esperar(page, 'text=Margem Total Disponível', 5000);
 
@@ -121,9 +119,69 @@ async function consultarPromosys(cpf) {
     const rmc = extrairValor("Margem Disponível RMC");
     const rcc = extrairValor("Margem Disponível RCC");
 
+    // =========================
+    // 🆕 EXTRAÇÃO DE CONTRATOS (NOVO BLOCO)
+    // =========================
+
+    const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
+
+    const contratos = [];
+    let atual = null;
+
+    for (const linha of linhas) {
+
+      const isBanco = /^\d+\s*-\s*/.test(linha);
+
+      if (isBanco) {
+        if (atual) contratos.push(atual);
+
+        atual = {
+          banco: linha,
+          valorParcela: 0,
+          taxa: "",
+          pagas: 0,
+          total: 0
+        };
+      }
+
+      if (!atual) continue;
+
+      // valor parcela
+      if (linha.includes("R$") && !linha.includes("Contrato")) {
+        const match = linha.match(/R\$ ?([\d.,]+)/);
+        if (match) {
+          const valor = parseFloat(match[1].replace(/\./g,'').replace(',','.'));
+          if (valor < 10000) atual.valorParcela = valor;
+        }
+      }
+
+      // taxa
+      if (linha.includes("%")) {
+        const match = linha.match(/([\d.,]+)%/);
+        if (match) atual.taxa = match[1] + "%";
+      }
+
+      // pagas / total
+      if (linha.includes("/") && linha.includes("-")) {
+        const match = linha.match(/(\d+)\/(\d+)/);
+        if (match) {
+          atual.pagas = parseInt(match[1]);
+          atual.total = parseInt(match[2]);
+        }
+      }
+    }
+
+    if (atual) contratos.push(atual);
+
+    // filtros
+    const totalContratos = contratos.length;
+    const bancos = [...new Set(contratos.map(c => c.banco))];
+    const parcelasAltas = contratos.filter(c => c.valorParcela > limiteParcela);
+
     console.log("💰 Margem:", margem);
     console.log("💳 RMC:", rmc);
     console.log("🏦 RCC:", rcc);
+    console.log("📊 Contratos:", totalContratos);
 
     await browser.close();
 
@@ -131,7 +189,10 @@ async function consultarPromosys(cpf) {
       nome,
       margem,
       rmc,
-      rcc
+      rcc,
+      totalContratos,
+      bancos,
+      parcelasAltas
     };
 
   } catch (err) {
@@ -144,7 +205,10 @@ async function consultarPromosys(cpf) {
       nome: null,
       margem: 0,
       rmc: 0,
-      rcc: 0
+      rcc: 0,
+      totalContratos: 0,
+      bancos: [],
+      parcelasAltas: []
     };
   }
 }
