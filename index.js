@@ -7,7 +7,7 @@ app.use(express.json());
 const { consultarPromosys } = require('./promosysBot');
 
 // -----------------------------
-// WEBHOOK (N8N / POSTMAN / IA TOOL)
+// WEBHOOK
 // -----------------------------
 app.post('/webhook', async (req, res) => {
 
@@ -22,11 +22,11 @@ app.post('/webhook', async (req, res) => {
 
   try {
 
-    // 🤖 CHAMA O ROBÔ (AGORA RETORNA OBJETO COMPLETO)
+    // 🤖 CHAMA O ROBÔ
     const dados = await consultarPromosys(cpf);
 
     // -----------------------------
-    // RESPOSTA FINAL PADRONIZADA
+    // RESPOSTA PADRONIZADA (AJUSTADA)
     // -----------------------------
     const resposta = {
       status: "ok",
@@ -37,11 +37,12 @@ app.post('/webhook', async (req, res) => {
       rmc: Number(dados.rmc || 0),
       rcc: Number(dados.rcc || 0),
 
-      contratos: Number(dados.contratos || 0),
+      // 🔥 CORREÇÃO IMPORTANTE AQUI
+      contratosAtivos: Number(dados.contratos || 0),
+
       bancos: dados.bancos || [],
       parcelasAltas: dados.parcelasAltas || [],
 
-      // 👇 resposta já pronta pra IA (HUMANA)
       mensagem: gerarMensagemHumana(dados)
     };
 
@@ -58,14 +59,12 @@ app.post('/webhook', async (req, res) => {
 });
 
 // -----------------------------
-// 🧠 GERADOR DE TEXTO HUMANO (IA FRIENDLY)
+// MENSAGEM HUMANA
 // -----------------------------
 function gerarMensagemHumana(dados) {
 
   const nome = dados.nome || "cliente";
-
   const margem = Number(dados.margem || 0);
-
   const temMargem = margem > 0;
 
   return `Este CPF pertence a ${nome}. ` +
@@ -75,7 +74,7 @@ function gerarMensagemHumana(dados) {
 
     `Não possui margem de cartão consignado (RMC) e não possui margem de cartão benefício (RCC). ` +
 
-    `O cliente possui ${dados.contratos || 0} contratos ativos.`;
+    `O cliente possui ${dados.contratos || 0} contratos ativos de consignado.`;
 }
 
 // -----------------------------
