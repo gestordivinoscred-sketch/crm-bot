@@ -1,5 +1,13 @@
 const { chromium } = require('playwright');
 
+async function esperar(page, selector, tempo) {
+  try {
+    await page.waitForSelector(selector, { timeout: tempo });
+  } catch {
+    console.log(`⚠️ Timeout em: ${selector}`);
+  }
+}
+
 async function consultarPromosys(cpf) {
 
   const browser = await chromium.launch({
@@ -11,34 +19,38 @@ async function consultarPromosys(cpf) {
   try {
 
     console.log("🔵 Abrindo sistema...");
-
     await page.goto('https://sistemapromosys.com.br/', {
       waitUntil: 'domcontentloaded'
     });
 
     // =========================
-    // LOGIN (rápido e direto)
+    // LOGIN
     // =========================
     console.log("🟡 Login...");
 
-    await page.waitForSelector('input[placeholder="Digite seu nome de usuário"]', { timeout: 8000 });
+    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 5000);
 
-    await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
-    await page.fill('input[placeholder="Digite sua senha"]', process.env.PROMOSYS_PASS);
+    await page.fill(
+      'input[placeholder="Digite seu nome de usuário"]',
+      process.env.PROMOSYS_USER
+    );
+
+    await page.fill(
+      'input[placeholder="Digite sua senha"]',
+      process.env.PROMOSYS_PASS
+    );
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 10000 });
+    await page.waitForURL('**/consulta/**', { timeout: 8000 });
 
     // =========================
-    // POPUP (rápido, sem espera)
+    // POPUP
     // =========================
     console.log("🟡 Fechando popup...");
 
-    await Promise.race([
-      page.click('text=×'),
-      page.click('[class*="close"]')
-    ]).catch(() => {});
+    await page.click('text=×').catch(() => {});
+    await page.click('[class*="close"]').catch(() => {});
 
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
@@ -52,58 +64,68 @@ async function consultarPromosys(cpf) {
       });
     });
 
+    console.log("🟢 Popup limpo");
+
     // =========================
-    // INSS (sem delay fixo)
+    // INSS
     // =========================
     console.log("🔵 Selecionando INSS...");
 
-    await page.click('text=INSS', { timeout: 5000 }).catch(() => {});
+    await page.click('text=INSS', { force: true });
 
-    await page.waitForSelector('input[placeholder="CPF / Benefício"]', { timeout: 8000 });
+    await esperar(page, 'text=CONSULTA INSS', 5000);
 
     // =========================
     // CPF
     // =========================
     console.log("🟡 Inserindo CPF...");
 
+    await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
+
     await page.fill('input[placeholder="CPF / Benefício"]', cpf);
 
-    await page.click('button:has-text("Consultar")');
+    await page.click('button:has-text("Consultar")', { force: true });
 
     // =========================
     // RESULTADO
     // =========================
     console.log("🟠 Aguardando resultado...");
 
-    await page.waitForSelector('text=Margem Total Disponível', { timeout: 10000 });
+    await esperar(page, 'text=Margem Total Disponível', 8000);
+
+    await page.waitForTimeout(2000);
 
     // =========================
-    // CAPTURA
+    // CAPTURA TEXTO REAL (CORRIGIDO)
     // =========================
-    const textoTopo = await page.locator('body').innerText();
+    const texto = await page.evaluate(() => document.body.innerText);
 
+    // =========================
+    // EXTRAÇÃO NOME (mais robusta)
+    // =========================
     let nome = "Não encontrado";
-    const matchNome = textoTopo.match(/Nome:\s*(.*)/);
 
+    const matchNome = texto.match(/Nome[:\s]+([A-Za-zÀ-ÿ\s]+)/i);
     if (matchNome) {
-      nome = matchNome[1].split('\n')[0].trim();
+      nome = matchNome[1].trim().split('\n')[0];
     }
 
     console.log("👤 Nome:", nome);
 
-    await page.mouse.wheel(0, 1500);
-
-    const texto = await page.locator('body').innerText();
-
+    // =========================
+    // FUNÇÃO VALORES (corrigida)
+    // =========================
     function extrairValor(label) {
-      const regex = new RegExp(label + "\\s*R\\$\\s?([\\d.,]+)");
+      const regex = new RegExp(label + "\\s*R?\\$?\\s*([\\d.,]+)", "i");
       const match = texto.match(regex);
 
-      if (match) {
-        return parseFloat(match[1].replace('.', '').replace(',', '.'));
-      }
+      if (!match) return 0;
 
-      return 0;
+      return parseFloat(
+        match[1]
+          .replace(/\./g, '')
+          .replace(',', '.')
+      );
     }
 
     const margem = extrairValor("Margem Total Disponível");
@@ -130,7 +152,7 @@ async function consultarPromosys(cpf) {
     console.log("❌ ERRO NO BOT:", err.message);
 
     return {
-      nome: null,
+      nome: "",
       margem: 0,
       rmc: 0,
       rcc: 0
