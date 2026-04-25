@@ -42,7 +42,7 @@ async function consultarPromosys(cpf) {
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 8000 });
+    await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
     // =========================
     // POPUP
@@ -91,46 +91,53 @@ async function consultarPromosys(cpf) {
     // =========================
     console.log("🟠 Aguardando resultado...");
 
-    await esperar(page, 'text=Margem Total Disponível', 8000);
+    await esperar(page, 'text=Margem Total Disponível', 10000);
 
     await page.waitForTimeout(2000);
 
     // =========================
-    // CAPTURA TEXTO REAL (CORRIGIDO)
+    // CAPTURA DIRETA (SEM INNERTEXT GLOBAL)
     // =========================
-    const texto = await page.evaluate(() => document.body.innerText);
 
-    // =========================
-    // EXTRAÇÃO NOME (mais robusta)
-    // =========================
+    // Nome (mais confiável)
     let nome = "Não encontrado";
 
-    const matchNome = texto.match(/Nome[:\s]+([A-Za-zÀ-ÿ\s]+)/i);
-    if (matchNome) {
-      nome = matchNome[1].trim().split('\n')[0];
-    }
+    try {
+      nome = await page
+        .locator('text=Nome')
+        .first()
+        .locator('xpath=..')
+        .innerText();
+    } catch {}
 
     console.log("👤 Nome:", nome);
 
     // =========================
-    // FUNÇÃO VALORES (corrigida)
+    // FUNÇÃO MAIS SEGURA PARA VALORES
     // =========================
-    function extrairValor(label) {
-      const regex = new RegExp(label + "\\s*R?\\$?\\s*([\\d.,]+)", "i");
-      const match = texto.match(regex);
+    async function pegarValor(label) {
+      try {
+        const elemento = await page.locator(`text=${label}`).first();
+        const texto = await elemento.locator('xpath=..').innerText();
 
-      if (!match) return 0;
+        const match = texto.match(/R?\$?\s*([\d.,]+)/);
 
-      return parseFloat(
-        match[1]
-          .replace(/\./g, '')
-          .replace(',', '.')
-      );
+        if (!match) return 0;
+
+        return parseFloat(
+          match[1]
+            .replace(/\./g, '')
+            .replace(',', '.')
+        );
+
+      } catch {
+        return 0;
+      }
     }
 
-    const margem = extrairValor("Margem Total Disponível");
-    const rmc = extrairValor("Margem Disponível RMC");
-    const rcc = extrairValor("Margem Disponível RCC");
+    const margem = await pegarValor("Margem Total Disponível");
+    const rmc = await pegarValor("Margem Disponível RMC");
+    const rcc = await pegarValor("Margem Disponível RCC");
 
     console.log("💰 Margem:", margem);
     console.log("💳 RMC:", rmc);
