@@ -1,13 +1,5 @@
 const { chromium } = require('playwright');
 
-async function esperar(page, selector, tempo) {
-  try {
-    await page.waitForSelector(selector, { timeout: tempo });
-  } catch {
-    console.log(`⚠️ Timeout em: ${selector}`);
-  }
-}
-
 async function consultarPromosys(cpf) {
 
   const browser = await chromium.launch({
@@ -19,31 +11,34 @@ async function consultarPromosys(cpf) {
   try {
 
     console.log("🔵 Abrindo sistema...");
+
     await page.goto('https://sistemapromosys.com.br/', {
       waitUntil: 'domcontentloaded'
     });
 
     // =========================
-    // LOGIN (3s)
+    // LOGIN (rápido e direto)
     // =========================
     console.log("🟡 Login...");
 
-    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 3000);
+    await page.waitForSelector('input[placeholder="Digite seu nome de usuário"]', { timeout: 8000 });
 
     await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
     await page.fill('input[placeholder="Digite sua senha"]', process.env.PROMOSYS_PASS);
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 3000 });
+    await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
     // =========================
-    // POPUP (rápido)
+    // POPUP (rápido, sem espera)
     // =========================
     console.log("🟡 Fechando popup...");
 
-    await page.click('text=×').catch(() => {});
-    await page.click('[class*="close"]').catch(() => {});
+    await Promise.race([
+      page.click('text=×'),
+      page.click('[class*="close"]')
+    ]).catch(() => {});
 
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
@@ -57,40 +52,34 @@ async function consultarPromosys(cpf) {
       });
     });
 
-    console.log("🟢 Popup limpo");
-
     // =========================
-    // INSS (5s)
+    // INSS (sem delay fixo)
     // =========================
     console.log("🔵 Selecionando INSS...");
 
-    await page.click('text=INSS', { force: true });
+    await page.click('text=INSS', { timeout: 5000 }).catch(() => {});
 
-    await esperar(page, 'text=CONSULTA INSS', 5000);
+    await page.waitForSelector('input[placeholder="CPF / Benefício"]', { timeout: 8000 });
 
     // =========================
-    // CPF (5s)
+    // CPF
     // =========================
-    console.log("🟡 Buscando CPF...");
-
-    await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
+    console.log("🟡 Inserindo CPF...");
 
     await page.fill('input[placeholder="CPF / Benefício"]', cpf);
 
-    await page.click('text=CPF / Benefício', { force: true });
-
-    await page.click('button:has-text("Consultar")', { force: true });
+    await page.click('button:has-text("Consultar")');
 
     // =========================
-    // RESULTADO (5s)
+    // RESULTADO
     // =========================
-    await esperar(page, 'text=Margem Total Disponível', 5000);
+    console.log("🟠 Aguardando resultado...");
+
+    await page.waitForSelector('text=Margem Total Disponível', { timeout: 10000 });
 
     // =========================
-    // CAPTURA DADOS
+    // CAPTURA
     // =========================
-    console.log("🟠 Capturando dados...");
-
     const textoTopo = await page.locator('body').innerText();
 
     let nome = "Não encontrado";
@@ -102,7 +91,7 @@ async function consultarPromosys(cpf) {
 
     console.log("👤 Nome:", nome);
 
-    await page.mouse.wheel(0, 2000);
+    await page.mouse.wheel(0, 1500);
 
     const texto = await page.locator('body').innerText();
 
