@@ -59,11 +59,17 @@ app.post('/webhook', async (req, res) => {
   try {
 
     // 🤖 CHAMA O ROBÔ REAL
-    const margem = await consultarPromosys(cpf);
+    const dados = await consultarPromosys(cpf);
 
-    const resposta = montarResposta(cpf, margem);
+    // 🔥 CORREÇÃO CRÍTICA AQUI
+    const resposta = montarResposta(cpf, dados.margem);
 
-    return res.json(resposta);
+    return res.json({
+      ...resposta,
+      nome: dados.nome,
+      rmc: dados.rmc,
+      rcc: dados.rcc
+    });
 
   } catch (err) {
 
