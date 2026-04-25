@@ -93,51 +93,45 @@ async function consultarPromosys(cpf) {
 
     await esperar(page, 'text=Margem Total Disponível', 10000);
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     // =========================
-    // CAPTURA DIRETA (SEM INNERTEXT GLOBAL)
+    // CAPTURA SEGURA (MODO FINAL)
     // =========================
 
-    // Nome (mais confiável)
+    const texto = await page.evaluate(() => document.body.innerText);
+
+    // =========================
+    // NOME
+    // =========================
     let nome = "Não encontrado";
 
-    try {
-      nome = await page
-        .locator('text=Nome')
-        .first()
-        .locator('xpath=..')
-        .innerText();
-    } catch {}
+    const matchNome = texto.match(/Nome\s*[:\-]?\s*(.+)/i);
+    if (matchNome) {
+      nome = matchNome[1].split('\n')[0].trim();
+    }
 
     console.log("👤 Nome:", nome);
 
     // =========================
-    // FUNÇÃO MAIS SEGURA PARA VALORES
+    // FUNÇÃO DE EXTRAÇÃO ROBUSTA
     // =========================
-    async function pegarValor(label) {
-      try {
-        const elemento = await page.locator(`text=${label}`).first();
-        const texto = await elemento.locator('xpath=..').innerText();
+    function extrair(label) {
+      const regex = new RegExp(label + ".*?([\\d.,]+)", "i");
+      const match = texto.match(regex);
 
-        const match = texto.match(/R?\$?\s*([\d.,]+)/);
+      if (!match) return 0;
 
-        if (!match) return 0;
-
-        return parseFloat(
-          match[1]
-            .replace(/\./g, '')
-            .replace(',', '.')
-        );
-
-      } catch {
-        return 0;
-      }
+      return parseFloat(
+        match[1]
+          .replace(/\./g, '')
+          .replace(',', '.')
+      );
     }
 
-    const margem = await pegarValor("Margem Total Disponível");
-    const rmc = await pegarValor("Margem Disponível RMC");
-    const rcc = await pegarValor("Margem Disponível RCC");
+    const margem = extrair("Margem Total Disponível");
+    const rmc = extrair("Margem Disponível RMC");
+    const rcc = extrair("Margem Disponível RCC");
 
     console.log("💰 Margem:", margem);
     console.log("💳 RMC:", rmc);
