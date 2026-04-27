@@ -74,41 +74,36 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     await page.click('text=INSS', { force: true });
     await esperar(page, 'text=CONSULTA INSS', 5000);
 
-  // =========================
+// =========================
 // TIPO DE BUSCA
 // =========================
-await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
 
-// 👇 DEFINE SE É CPF OU TELEFONE (AUTOMÁTICO)
 const isTelefone = cpf.length >= 10;
-
-let seletorInput = '';
 
 if (isTelefone) {
   console.log("📞 Buscando por TELEFONE...");
-
   await page.click('text=Telefone');
-
-  seletorInput = 'input[placeholder="TELEFONE"]';
-
 } else {
   console.log("🆔 Buscando por CPF...");
-
   await page.click('text=CPF / Benefício');
-
-  seletorInput = 'input[placeholder="CPF / Benefício"]';
 }
 
-// 🔥 espera o campo certo aparecer
-await page.waitForSelector(seletorInput, { timeout: 5000 });
+// 🔥 pega o input real visível (SEM placeholder)
+const input = page.locator('input:visible').first();
 
-// limpa e preenche
-await page.fill(seletorInput, '');
-await page.fill(seletorInput, cpf);
-    // =========================
-    // RESULTADO
-    // =========================
-    await esperar(page, 'text=Margem Total Disponível', 5000);
+await input.waitFor({ state: 'visible', timeout: 5000 });
+
+// preenche
+await input.fill('');
+await input.fill(cpf);
+
+// 🔥 ESSENCIAL → EXECUTA CONSULTA
+await page.click('button:has-text("Consultar")');
+
+// =========================
+// RESULTADO
+// =========================
+await esperar(page, 'text=Margem Total Disponível', 3000);
 
     // =========================
     // CAPTURA DADOS
