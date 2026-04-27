@@ -41,7 +41,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 3000 });
+    await page.waitForURL('**/consulta/**', { timeout: 5000 });
 
     // =========================
     // POPUP
@@ -106,13 +106,9 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
 
     console.log("👤 Nome:", nome);
 
-    await page.mouse.wheel(0, 2000);
-
-    const texto = await page.locator('body').innerText();
-
     function extrairValor(label) {
       const regex = new RegExp(label + "\\s*R\\$\\s?([\\d.,]+)");
-      const match = texto.match(regex);
+      const match = textoTopo.match(regex);
 
       if (match) {
         return parseFloat(
@@ -128,65 +124,47 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     const rcc = extrairValor("Margem Disponível RCC");
 
     // =========================
-    // CONTRATOS
+    // CONTRATOS (TABELA REAL)
     // =========================
-    const linhas = texto
-      .split("\n")
-      .map(l => l.trim())
-      .filter(Boolean);
+    console.log("📊 Lendo tabela de contratos...");
 
-    const contratos = [];
-    let atual = null;
+    await esperar(page, 'table tbody tr', 5000);
 
-    for (const linha of linhas) {
-      const isBanco = /^\d+\s*-\s*/.test(linha);
+    const contratos = await page.$$eval('table tbody tr', rows =>
+      rows.map(row => {
+        const cols = Array.from(row.querySelectorAll('td')).map(td =>
+          td.innerText.trim()
+        );
 
-      if (isBanco) {
-        if (atual) contratos.push(atual);
-
-        atual = {
-          banco: linha,
-          valorParcela: 0,
-          taxa: "",
-          pagas: 0,
-          total: 0
-        };
-      }
-
-      if (!atual) continue;
-
-      if (linha.includes("R$") && !linha.includes("Contrato")) {
-        const match = linha.match(/R\$ ?([\d.,]+)/);
-
-        if (match) {
-          const valor = parseFloat(
-            match[1].replace(/\./g, '').replace(',', '.')
+        const parseMoney = (valor) => {
+          if (!valor) return 0;
+          return parseFloat(
+            valor.replace('R$', '').replace(/\./g, '').replace(',', '.')
           );
+        };
 
-          if (valor < 10000) atual.valorParcela = valor;
-        }
-      }
+        const matchParcelas = cols[8]?.match(/(\d+)\/(\d+)/);
 
-      if (linha.includes("%")) {
-        const match = linha.match(/([\d.,]+)%/);
-
-        if (match) atual.taxa = match[1] + "%";
-      }
-
-      if (linha.includes("/") && linha.includes("-")) {
-        const match = linha.match(/(\d+)\/(\d+)/);
-
-        if (match) {
-          atual.pagas = parseInt(match[1]);
-          atual.total = parseInt(match[2]);
-        }
-      }
-    }
-
-    if (atual) contratos.push(atual);
+        return {
+          banco: cols[0] || "",
+          contrato: cols[1] || "",
+          averbacao: cols[2] || "",
+          inicioDesconto: cols[3] || "",
+          finalDesconto: cols[4] || "",
+          valorContrato: parseMoney(cols[5]),
+          taxa: cols[6] || "",
+          valorParcela: parseMoney(cols[7]),
+          pagas: matchParcelas ? parseInt(matchParcelas[1]) : 0,
+          total: matchParcelas ? parseInt(matchParcelas[2]) : 0,
+          quitacao: parseMoney(cols[9])
+        };
+      })
+    );
 
     const totalContratos = contratos.length;
+
     const bancos = [...new Set(contratos.map(c => c.banco))];
+
     const parcelasAltas = contratos.filter(
       c => c.valorParcela > limiteParcela
     );
@@ -205,7 +183,8 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
       rcc,
       totalContratos,
       bancos,
-      parcelasAltas
+      parcelasAltas,
+      contratos
     };
 
   } catch (err) {
@@ -220,7 +199,8 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
       rcc: 0,
       totalContratos: 0,
       bancos: [],
-      parcelasAltas: []
+      parcelasAltas: [],
+      contratos: []
     };
   }
 }
