@@ -25,8 +25,14 @@ app.post('/webhook', async (req, res) => {
     // 🤖 CHAMA O ROBÔ
     const dados = await consultarPromosys(cpf);
 
+    // 🔥 calcula saldo total de quitação
+    const saldoQuitacaoTotal = (dados.contratos || []).reduce(
+      (acc, c) => acc + (c.quitacao || 0),
+      0
+    );
+
     // -----------------------------
-    // RESPOSTA PADRONIZADA (AJUSTADA)
+    // RESPOSTA PADRONIZADA
     // -----------------------------
     const resposta = {
       status: "ok",
@@ -37,13 +43,19 @@ app.post('/webhook', async (req, res) => {
       rmc: Number(dados.rmc || 0),
       rcc: Number(dados.rcc || 0),
 
-      // 🔥 CORREÇÃO IMPORTANTE AQUI
-      contratosAtivos: Number(dados.contratos || 0),
+      contratosAtivos: dados.totalContratos || 0,
+
+      saldoQuitacaoTotal,
 
       bancos: dados.bancos || [],
       parcelasAltas: dados.parcelasAltas || [],
 
-      mensagem: gerarMensagemHumana(dados)
+      contratos: dados.contratos || [],
+
+      mensagem: gerarMensagemHumana({
+        ...dados,
+        saldoQuitacaoTotal
+      })
     };
 
     return res.json(resposta);
@@ -65,16 +77,21 @@ function gerarMensagemHumana(dados) {
 
   const nome = dados.nome || "cliente";
   const margem = Number(dados.margem || 0);
-  const temMargem = margem > 0;
+  const contratos = dados.totalContratos || 0;
+  const saldo = Number(dados.saldoQuitacaoTotal || 0);
 
   return `Este CPF pertence a ${nome}. ` +
-    (temMargem
-      ? `No momento, ele possui uma margem consignável de R$ ${margem}. `
-      : `No momento, ele não possui margem consignável disponível. `) +
+    (margem > 0
+      ? `Possui margem consignável de R$ ${margem}. `
+      : `Não possui margem consignável disponível. `) +
 
-    `Não possui margem de cartão consignado (RMC) e não possui margem de cartão benefício (RCC). ` +
+    `RMC: R$ ${dados.rmc || 0}. RCC: R$ ${dados.rcc || 0}. ` +
 
-    `O cliente possui ${dados.contratos || 0} contratos ativos de consignado.`;
+    `Possui ${contratos} contratos ativos. ` +
+
+    (saldo > 0
+      ? `Saldo total para quitação aproximado: R$ ${saldo}.`
+      : ``);
 }
 
 // -----------------------------
