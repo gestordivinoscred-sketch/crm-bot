@@ -9,9 +9,7 @@ async function esperar(page, selector, tempo) {
 }
 
 async function consultarPromosys(cpf, limiteParcela = 0) {
-  const browser = await chromium.launch({
-    headless: true
-  });
+  const browser = await chromium.launch({ headless: true });
 
   const page = await browser.newPage();
 
@@ -50,21 +48,6 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
 
     await page.click('text=×').catch(() => {});
     await page.click('[class*="close"]').catch(() => {});
-
-    await page.evaluate(() => {
-      document.querySelectorAll('div').forEach(el => {
-        const style = window.getComputedStyle(el);
-
-        if (
-          (style.position === 'fixed' || style.position === 'absolute') &&
-          parseInt(style.zIndex) > 1000
-        ) {
-          el.remove();
-        }
-      });
-    });
-
-    console.log("🟢 Popup limpo");
 
     // =========================
     // INSS
@@ -121,7 +104,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     await page.evaluate(() => window.scrollTo(0, 0));
 
     // =========================
-    // TEXTO GERAL
+    // TEXTO
     // =========================
     const texto = await page.locator('body').innerText();
 
@@ -135,10 +118,8 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       nome = matchNome[1].split('\n')[0].trim();
     }
 
-    console.log("👤 Nome:", nome);
-
     // =========================
-    // VALORES GERAIS
+    // VALORES
     // =========================
     function extrairValor(label) {
       const regex = new RegExp(label + "\\s*R\\$\\s?([\\d.,]+)");
@@ -156,7 +137,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     const rcc = extrairValor("Margem Disponível RCC");
 
     // =========================
-    // CONTRATOS (PARSE)
+    // CONTRATOS
     // =========================
     const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
 
@@ -168,8 +149,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
 
     for (const linha of linhas) {
 
-      // detecta mudança de contexto
-      if (linha.includes("R$") || linha.includes("%") || /\d+\/\d+/.test(linha)) {
+      if (linha.includes("R$") || /\d+\/\d+/.test(linha) || linha.includes("%")) {
         modo = "contratos";
       }
 
@@ -189,7 +169,11 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       const isNovoContrato = /^\d{2,}-\d+\/\d+/.test(linha);
 
       if (isNovoContrato) {
-        if (atual) contratos.push(atual);
+
+        if (atual) {
+          const existe = contratos.find(c => c.banco === atual.banco);
+          if (!existe) contratos.push(atual);
+        }
 
         atual = {
           banco: linha,
@@ -235,12 +219,17 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       }
     }
 
-    if (atual) contratos.push(atual);
+    if (atual) {
+      const existe = contratos.find(c => c.banco === atual.banco);
+      if (!existe) contratos.push(atual);
+    }
 
     // =========================
-    // 🔥 QUITAÇÃO (INPUT EDITÁVEL)
+    // 🔥 QUITAÇÃO GLOBAL (CORRETO AGORA)
     // =========================
-    console.log("🟣 Capturando quitação (input)...");
+    console.log("🟣 Capturando quitação...");
+
+    let quitacaoGlobal = 0;
 
     const inputs = await page.locator('input').all();
 
@@ -252,25 +241,21 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
           value.replace(/\./g, '').replace(',', '.')
         );
 
-        // heurística segura: valor alto e válido
         if (!isNaN(parsed) && parsed > 1000) {
-          contratos.forEach(c => {
-            if (!c.quitacao) c.quitacao = parsed;
-          });
+          quitacaoGlobal = parsed;
         }
 
       } catch {}
     }
 
+    // aplica UMA vez só (não duplica mais)
+    contratos.forEach(c => {
+      c.quitacao = quitacaoGlobal;
+    });
+
     // =========================
     // FINAL
     // =========================
-    const totalContratos = contratos.length;
-
-    const parcelasAltas = contratos.filter(
-      c => c.valorParcela > limiteParcela
-    );
-
     await browser.close();
 
     return {
@@ -278,10 +263,10 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       margem,
       rmc,
       rcc,
-      totalContratos,
+      totalContratos: contratos.length,
       bancos,
       contratos,
-      parcelasAltas
+      parcelasAltas: contratos.filter(c => c.valorParcela > limiteParcela)
     };
 
   } catch (err) {
