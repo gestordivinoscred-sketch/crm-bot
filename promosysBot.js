@@ -82,17 +82,29 @@ await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
 // 👇 DEFINE SE É CPF OU TELEFONE (AUTOMÁTICO)
 const isTelefone = cpf.length >= 10;
 
+let seletorInput = '';
+
 if (isTelefone) {
   console.log("📞 Buscando por TELEFONE...");
-  await page.click('text=Telefone').catch(() => {});
+
+  await page.click('text=Telefone');
+
+  seletorInput = 'input[placeholder="Telefone"]';
+
 } else {
   console.log("🆔 Buscando por CPF...");
-  await page.click('text=CPF / Benefício').catch(() => {});
+
+  await page.click('text=CPF / Benefício');
+
+  seletorInput = 'input[placeholder="CPF / Benefício"]';
 }
 
+// 🔥 espera o campo certo aparecer
+await page.waitForSelector(seletorInput, { timeout: 5000 });
+
 // limpa e preenche
-await page.fill('input[placeholder="CPF / Benefício"]', '');
-await page.fill('input[placeholder="CPF / Benefício"]', cpf);
+await page.fill(seletorInput, '');
+await page.fill(seletorInput, cpf);
     // =========================
     // RESULTADO
     // =========================
