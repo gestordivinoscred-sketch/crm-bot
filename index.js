@@ -3,6 +3,7 @@ const app = express();
 
 app.use(express.json());
 
+// importa o robô
 const { consultarPromosys } = require('./promosysBot');
 
 // -----------------------------
@@ -24,7 +25,7 @@ app.post('/webhook', async (req, res) => {
     // 🤖 CHAMA O ROBÔ
     const dados = await consultarPromosys(cpf);
 
-    // 🔥 soma de quitação REAL (agora existe no bot)
+    // 🔥 calcula saldo total de quitação
     const saldoQuitacaoTotal = (dados.contratos || []).reduce(
       (acc, c) => acc + (c.quitacao || 0),
       0
@@ -46,7 +47,7 @@ app.post('/webhook', async (req, res) => {
 
       saldoQuitacaoTotal,
 
-      bancos: Array.isArray(dados.bancos) ? dados.bancos : [],
+      bancos: dados.bancos || [],
       parcelasAltas: dados.parcelasAltas || [],
 
       contratos: dados.contratos || [],
@@ -89,8 +90,8 @@ function gerarMensagemHumana(dados) {
     `Possui ${contratos} contratos ativos. ` +
 
     (saldo > 0
-      ? `Saldo total de quitação: R$ ${saldo}.`
-      : `Sem saldo de quitação identificado.`);
+      ? `Saldo total para quitação aproximado: R$ ${saldo}.`
+      : ``);
 }
 
 // -----------------------------
