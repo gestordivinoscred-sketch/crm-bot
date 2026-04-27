@@ -121,7 +121,30 @@ await esperar(page, 'text=Margem Total Disponível', 3000);
 
     console.log("👤 Nome:", nome);
 
-    await page.mouse.wheel(0, 2000);
+   console.log("📜 Fazendo scroll completo...");
+
+await page.evaluate(async () => {
+  await new Promise(resolve => {
+    let totalHeight = 0;
+    const distance = 500;
+
+    const timer = setInterval(() => {
+      window.scrollBy(0, distance);
+      totalHeight += distance;
+
+      if (totalHeight >= document.body.scrollHeight) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 200);
+  });
+});
+
+// aguarda carregar tudo
+await page.waitForTimeout(1500);
+
+// volta pro topo
+await page.evaluate(() => window.scrollTo(0, 0));
 
     const texto = await page.locator('body').innerText();
 
