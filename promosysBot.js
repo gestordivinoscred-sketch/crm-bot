@@ -74,46 +74,39 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     await page.click('text=INSS', { force: true });
     await esperar(page, 'text=CONSULTA INSS', 3000);
 
-// =========================
-// TIPO DE BUSCA
-// =========================
+    // =========================
+    // TIPO DE BUSCA
+    // =========================
+    const isTelefone = cpf.length >= 10;
 
-const isTelefone = cpf.length >= 10;
+    if (isTelefone) {
+      console.log("📞 Buscando por TELEFONE...");
+      await page.click('text=TELEFONE');
+    } else {
+      console.log("🆔 Buscando por CPF...");
+      await page.click('text=CPF / Benefício');
+    }
 
-if (isTelefone) {
-  console.log("📞 Buscando por TELEFONE...");
-  await page.click('text=TELEFONE');
-} else {
-  console.log("🆔 Buscando por CPF...");
-  await page.click('text=CPF / Benefício');
-}
+    const input = page.locator('input:visible').first();
+    await input.waitFor({ state: 'visible', timeout: 3000 });
 
-// 🔥 pega o input real visível (SEM placeholder)
-const input = page.locator('input:visible').first();
+    await input.fill('');
+    await input.fill(cpf);
 
-await input.waitFor({ state: 'visible', timeout: 3000 });
+    await page.click('button:has-text("Consultar")');
 
-// preenche
-await input.fill('');
-await input.fill(cpf);
-
-// 🔥 ESSENCIAL → EXECUTA CONSULTA
-await page.click('button:has-text("Consultar")');
-
-// =========================
-// RESULTADO
-// =========================
-await esperar(page, 'text=Margem Total Disponível', 3000);
+    await esperar(page, 'text=Margem Total Disponível', 3000);
 
     // =========================
-    // CAPTURA DADOS
+    // CAPTURA
     // =========================
     console.log("🟠 Capturando dados...");
 
-    const textoTopo = await page.locator('body').innerText();
+    const texto = await page.locator('body').innerText();
+
+    const textoTopo = texto;
 
     let nome = "Não encontrado";
-
     const matchNome = textoTopo.match(/Nome:\s*(.*)/);
     if (matchNome) {
       nome = matchNome[1].split('\n')[0].trim();
@@ -121,41 +114,38 @@ await esperar(page, 'text=Margem Total Disponível', 3000);
 
     console.log("👤 Nome:", nome);
 
-   console.log("📜 Fazendo scroll completo...");
+    // =========================
+    // SCROLL
+    // =========================
+    await page.evaluate(async () => {
+      await new Promise(resolve => {
+        let totalHeight = 0;
+        const distance = 500;
 
-await page.evaluate(async () => {
-  await new Promise(resolve => {
-    let totalHeight = 0;
-    const distance = 500;
+        const timer = setInterval(() => {
+          window.scrollBy(0, distance);
+          totalHeight += distance;
 
-    const timer = setInterval(() => {
-      window.scrollBy(0, distance);
-      totalHeight += distance;
+          if (totalHeight >= document.body.scrollHeight) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 200);
+      });
+    });
 
-      if (totalHeight >= document.body.scrollHeight) {
-        clearInterval(timer);
-        resolve();
-      }
-    }, 200);
-  });
-});
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.scrollTo(0, 0));
 
-// aguarda carregar tudo
-await page.waitForTimeout(1500);
-
-// volta pro topo
-await page.evaluate(() => window.scrollTo(0, 0));
-
-    const texto = await page.locator('body').innerText();
-
+    // =========================
+    // VALORES
+    // =========================
     function extrairValor(label) {
       const regex = new RegExp(label + "\\s*R\\$\\s?([\\d.,]+)");
       const match = texto.match(regex);
 
       if (match) {
-        return parseFloat(
-          match[1].replace('.', '').replace(',', '.')
-        );
+        return parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
       }
 
       return 0;
@@ -166,20 +156,41 @@ await page.evaluate(() => window.scrollTo(0, 0));
     const rcc = extrairValor("Margem Disponível RCC");
 
     // =========================
-    // CONTRATOS
+    // PARSER INTELIGENTE
     // =========================
-    const linhas = texto
-      .split("\n")
-      .map(l => l.trim())
-      .filter(Boolean);
+    const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
 
+    const bancos = [];
     const contratos = [];
+
     let atual = null;
+    let modo = "inicio";
 
     for (const linha of linhas) {
-const isBanco = /^\d+\s*-\s*/.test(linha);
 
-      if (isBanco) {
+      // Detecta início da área de contratos
+      if (linha.includes("R$") || linha.includes("%") || linha.includes("/")) {
+        modo = "contratos";
+      }
+
+      // =========================
+      // BANCOS (RESUMO)
+      // =========================
+      if (modo === "inicio") {
+        const isBanco = /^\d+\s*-\s*.*BANCO|QI|FACTA|CREDITO|SCD/i.test(linha);
+
+        if (isBanco) {
+          bancos.push(linha);
+        }
+        continue;
+      }
+
+      // =========================
+      // CONTRATOS DETALHADOS
+      // =========================
+      const isNovoContrato = /^\d{2,}-\d+\/\d+/.test(linha);
+
+      if (isNovoContrato) {
         if (atual) contratos.push(atual);
 
         atual = {
@@ -189,11 +200,14 @@ const isBanco = /^\d+\s*-\s*/.test(linha);
           pagas: 0,
           total: 0
         };
+
+        continue;
       }
 
       if (!atual) continue;
 
-      if (linha.includes("R$") && !linha.includes("Contrato")) {
+      // valor parcela
+      if (linha.includes("R$")) {
         const match = linha.match(/R\$ ?([\d.,]+)/);
 
         if (match) {
@@ -205,13 +219,14 @@ const isBanco = /^\d+\s*-\s*/.test(linha);
         }
       }
 
+      // taxa
       if (linha.includes("%")) {
         const match = linha.match(/([\d.,]+)%/);
-
         if (match) atual.taxa = match[1] + "%";
       }
 
-      if (linha.includes("/") && linha.includes("-")) {
+      // parcelas pagas / total
+      if (linha.includes("/") && /\d+\/\d+/.test(linha)) {
         const match = linha.match(/(\d+)\/(\d+)/);
 
         if (match) {
@@ -223,8 +238,10 @@ const isBanco = /^\d+\s*-\s*/.test(linha);
 
     if (atual) contratos.push(atual);
 
+    // =========================
+    // FINALIZAÇÃO
+    // =========================
     const totalContratos = contratos.length;
-    const bancos = [...new Set(contratos.map(c => c.banco))];
     const parcelasAltas = contratos.filter(
       c => c.valorParcela > limiteParcela
     );
@@ -243,6 +260,7 @@ const isBanco = /^\d+\s*-\s*/.test(linha);
       rcc,
       totalContratos,
       bancos,
+      contratos,
       parcelasAltas
     };
 
@@ -258,6 +276,7 @@ const isBanco = /^\d+\s*-\s*/.test(linha);
       rcc: 0,
       totalContratos: 0,
       bancos: [],
+      contratos: [],
       parcelasAltas: []
     };
   }
