@@ -26,17 +26,30 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     await page.click('text=Acessar o sistema');
     await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
-    // NAVEGAÇÃO INSS
-    console.log("🖱️ Acessando menu INSS...");
-    await page.click('text=INSS', { force: true });
-    await esperar(page, 'button:has-text("Consultar")', 10000);
+    // LIMPEZA DE POPUPS (Igual ao seu anterior)
+    await page.evaluate(() => {
+      document.querySelectorAll('div').forEach(el => {
+        if (parseInt(window.getComputedStyle(el).zIndex) > 1000) el.remove();
+      });
+    });
 
-    // Preenche CPF/Telefone
-    const inputCPF = page.locator('input[id*="beneficio"], input[placeholder*="CPF"], input:visible').first();
-    await inputCPF.fill(cpf);
+    // NAVEGAÇÃO INSS (Voltando para a sua lógica original)
+    await page.click('text=INSS', { force: true });
+    await esperar(page, 'button:has-text("Consultar")', 5000);
+
+    const isTelefone = cpf.replace(/\D/g, '').length >= 10;
+    if (isTelefone) { 
+      await page.click('text=TELEFONE'); 
+    } else { 
+      await page.click('text=CPF / Benefício'); 
+    }
+
+    // Pega o input exatamente como estava no seu código que funcionava
+    const input = page.locator('input:visible').first();
+    await input.fill(cpf);
     await page.click('button:has-text("Consultar")');
 
-    await esperar(page, 'text=Margem Total Disponível', 15000);
+    await esperar(page, 'text=Margem Total Disponível', 12000);
 
     // DADOS GERAIS
     const extrairDoTexto = await page.evaluate(() => {
@@ -50,7 +63,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       };
     });
 
-    // EXTRAÇÃO DA TABELA (SOMENTE O QUE VOCÊ PRECISA)
+    // EXTRAÇÃO DA TABELA (COLUNAS LIMPAS)
     const contratos = await page.evaluate(() => {
       const limparMoeda = (t) => {
         if (!t) return 0;
@@ -60,9 +73,9 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
 
       const tabelas = Array.from(document.querySelectorAll('table'));
       const tabelaReal = tabelas.find(t => t.innerText.includes('Quitação') && t.innerText.includes('Banco'));
-
       if (!tabelaReal) return [];
 
+      // Filtra as linhas da tabela
       const rows = Array.from(tabelaReal.querySelectorAll('tr')).filter(r => r.querySelectorAll('td').length >= 10);
       
       return rows.map(row => {
@@ -70,7 +83,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
         const bancoNome = cols[1]?.innerText.trim();
         if (!bancoNome || bancoNome.includes("Banco")) return null;
 
-        // Extrai apenas o número de parcelas que faltam (ex: "91 Restantes")
+        // Pega as parcelas restantes (ex: de "5/96 91 Restantes", pega "91")
         const pagasTexto = cols[9]?.innerText || "";
         const matchRestantes = pagasTexto.match(/(\d+)\s*Restantes/);
         const restantes = matchRestantes ? parseInt(matchRestantes[1]) : 0;
@@ -78,7 +91,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
         return {
           banco: bancoNome,
           contrato: cols[2]?.innerText.trim(),
-          taxa: cols[7]?.innerText.trim(),           // Pula Averbação, Datas e Valor Contrato
+          taxa: cols[7]?.innerText.trim(), // Pula Averbação/Início/Final/ValorContrato
           valorParcela: limparMoeda(cols[8]?.innerText),
           parcelasRestantes: restantes,
           quitacao: limparMoeda(cols[10]?.innerText) || limparMoeda(cols[10]?.querySelector('input')?.value)
@@ -87,13 +100,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     });
 
     await browser.close();
-
-    return {
-      ...extrairDoTexto,
-      totalContratos: contratos.length,
-      bancos: [...new Set(contratos.map(c => c.banco))],
-      contratos 
-    };
+    return { ...extrairDoTexto, totalContratos: contratos.length, contratos };
 
   } catch (err) {
     console.error("❌ Erro fatal:", err.message);
