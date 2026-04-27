@@ -124,48 +124,64 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     const rcc = extrairValor("Margem Disponível RCC");
 
     // =========================
-    // CONTRATOS (TABELA REAL)
+    // CONTRATOS (TABELA CORRETA)
     // =========================
-    console.log("📊 Lendo tabela de contratos...");
+    console.log("📊 Localizando tabela correta...");
 
-    await esperar(page, 'table tbody tr', 5000);
+    const tabela = page.locator('table:has-text("Banco")').first();
 
-    const contratos = await page.$$eval('table tbody tr', rows =>
+    await esperar(page, 'table:has-text("Banco") tbody tr', 5000);
+
+    const contratosRaw = await tabela.$$eval('tbody tr', rows =>
       rows.map(row => {
         const cols = Array.from(row.querySelectorAll('td')).map(td =>
           td.innerText.trim()
         );
 
-        const parseMoney = (valor) => {
-          if (!valor) return 0;
-          return parseFloat(
-            valor.replace('R$', '').replace(/\./g, '').replace(',', '.')
-          );
-        };
-
-        const matchParcelas = cols[8]?.match(/(\d+)\/(\d+)/);
-
-        return {
-          banco: cols[0] || "",
-          contrato: cols[1] || "",
-          averbacao: cols[2] || "",
-          inicioDesconto: cols[3] || "",
-          finalDesconto: cols[4] || "",
-          valorContrato: parseMoney(cols[5]),
-          taxa: cols[6] || "",
-          valorParcela: parseMoney(cols[7]),
-          pagas: matchParcelas ? parseInt(matchParcelas[1]) : 0,
-          total: matchParcelas ? parseInt(matchParcelas[2]) : 0,
-          quitacao: parseMoney(cols[9])
-        };
+        return cols;
       })
     );
 
-    const totalContratos = contratos.length;
+    const parseMoney = (valor) => {
+      if (!valor) return 0;
+      return parseFloat(
+        valor.replace('R$', '').replace(/\./g, '').replace(',', '.')
+      );
+    };
 
-    const bancos = [...new Set(contratos.map(c => c.banco))];
+    const contratos = contratosRaw.map(cols => {
+      const matchParcelas = cols[8]?.match(/(\d+)\/(\d+)/);
 
-    const parcelasAltas = contratos.filter(
+      return {
+        banco: cols[0] || "",
+        contrato: cols[1] || "",
+        averbacao: cols[2] || "",
+        inicioDesconto: cols[3] || "",
+        finalDesconto: cols[4] || "",
+        valorContrato: parseMoney(cols[5]),
+        taxa: cols[6] || "",
+        valorParcela: parseMoney(cols[7]),
+        pagas: matchParcelas ? parseInt(matchParcelas[1]) : 0,
+        total: matchParcelas ? parseInt(matchParcelas[2]) : 0,
+        quitacao: parseMoney(cols[9])
+      };
+    });
+
+    // 🔥 FILTRO PRA LIMPAR SUJEIRA
+    const contratosFiltrados = contratos.filter(c =>
+      c.banco.includes("BANCO") &&
+      c.contrato &&
+      c.contrato.length > 5 &&
+      c.valorParcela > 0
+    );
+
+    const totalContratos = contratosFiltrados.length;
+
+    const bancos = [
+      ...new Set(contratosFiltrados.map(c => c.banco))
+    ];
+
+    const parcelasAltas = contratosFiltrados.filter(
       c => c.valorParcela > limiteParcela
     );
 
@@ -184,7 +200,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
       totalContratos,
       bancos,
       parcelasAltas,
-      contratos
+      contratos: contratosFiltrados
     };
 
   } catch (err) {
