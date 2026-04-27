@@ -28,7 +28,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
 
     await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
-    // LIMPEZA DE POPUPS E SCROLL
+    // LIMPEZA DE POPUPS
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
         if (parseInt(window.getComputedStyle(el).zIndex) > 1000) el.remove();
@@ -47,7 +47,6 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     await input.fill(cpf);
     await page.click('button:has-text("Consultar")');
 
-    // Aguarda o carregamento dos dados
     await esperar(page, 'text=Margem Total Disponível', 12000);
 
     // DADOS GERAIS
@@ -55,19 +54,16 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       const corpo = document.body.innerText;
       const limpar = (v) => parseFloat(v.replace(/\./g, '').replace(',', '.')) || 0;
       const nomeMatch = corpo.match(/Nome:\s*(.*)/);
-      const mMatch = corpo.match(/Margem Total Disponível\s*R\$\s?([\d.,]+)/);
       return {
         nome: nomeMatch ? nomeMatch[1].split('\n')[0].trim() : "Não encontrado",
-        margem: mMatch ? limpar(mMatch[1]) : 0,
+        margem: corpo.match(/Margem Total Disponível\s*R\$\s?([\d.,]+)/) ? limpar(corpo.match(/Margem Total Disponível\s*R\$\s?([\d.,]+)/)[1]) : 0,
         rmc: corpo.match(/Margem Disponível RMC\s*R\$\s?([\d.,]+)/) ? limpar(corpo.match(/Margem Disponível RMC\s*R\$\s?([\d.,]+)/)[1]) : 0,
         rcc: corpo.match(/Margem Disponível RCC\s*R\$\s?([\d.,]+)/) ? limpar(corpo.match(/Margem Disponível RCC\s*R\$\s?([\d.,]+)/)[1]) : 0
       };
     });
 
-    // =========================
-    // EXTRAÇÃO DA TABELA (LOGICA SNIFFER)
-    // =========================
-    console.log("📊 Farejando a tabela de contratos correta...");
+    // EXTRAÇÃO DA TABELA (COLUNAS AJUSTADAS)
+    console.log("📊 Extraindo contratos com índices corrigidos...");
     const contratos = await page.evaluate(() => {
       const limparMoeda = (t) => {
         if (!t) return 0;
@@ -75,34 +71,31 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
         return parseFloat(val) || 0;
       };
 
-      // Pega todas as tabelas e filtra apenas a que tem a coluna "Quitação" E "Taxa"
       const tabelas = Array.from(document.querySelectorAll('table'));
-      const tabelaReal = tabelas.find(t => {
-        const txt = t.innerText;
-        return txt.includes('Quitação') && txt.includes('Taxa') && !txt.includes('Tipo de Operação');
-      });
+      const tabelaReal = tabelas.find(t => t.innerText.includes('Quitação') && t.innerText.includes('Banco') && !t.innerText.includes('Tipo de Operação'));
 
       if (!tabelaReal) return [];
 
-      // Pega as linhas, ignorando o cabeçalho (th ou a primeira tr)
       const rows = Array.from(tabelaReal.querySelectorAll('tr')).filter(r => r.querySelectorAll('td').length > 5);
       
       return rows.map(row => {
         const cols = row.querySelectorAll('td');
-        // Se a primeira coluna tiver o texto "Banco", é o cabeçalho, ignora
-        if (cols[0].innerText.includes("Banco") || cols[0].innerText.includes("Selecionar")) return null;
+        
+        // Pula coluna 0 (checkbox) e pega Banco na 1
+        const bancoNome = cols[1]?.innerText.trim();
+        if (!bancoNome || bancoNome.includes("Banco") || bancoNome === "") return null;
 
         return {
-          banco: cols[0]?.innerText.trim(),
-          contrato: cols[1]?.innerText.trim(),
-          valorContrato: limparMoeda(cols[5]?.innerText),
+          banco: bancoNome,
+          contrato: cols[2]?.innerText.trim(),
+          valorContrato: limparMoeda(cols[5]?.innerText), // Coluna original do valor
           taxa: cols[6]?.innerText.trim(),
           valorParcela: limparMoeda(cols[7]?.innerText),
           pagas: parseInt(cols[8]?.innerText.split('/')[0]) || 0,
           total: parseInt(cols[8]?.innerText.split('/')[1]) || 0,
           quitacao: limparMoeda(cols[9]?.innerText) || limparMoeda(cols[9]?.querySelector('input')?.value)
         };
-      }).filter(c => c !== null && c.valorParcela > 0);
+      }).filter(c => c !== null);
     });
 
     await browser.close();
