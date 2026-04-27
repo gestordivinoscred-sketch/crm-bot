@@ -27,7 +27,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     // =========================
     console.log("🟡 Login...");
 
-    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 3000);
+    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 5000);
 
     await page.fill(
       'input[placeholder="Digite seu nome de usuário"]',
@@ -41,7 +41,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 5000 });
+    await page.waitForURL('**/consulta/**', { timeout: 8000 });
 
     // =========================
     // POPUP
@@ -72,23 +72,25 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     console.log("🔵 Selecionando INSS...");
 
     await page.click('text=INSS', { force: true });
-    await esperar(page, 'text=CONSULTA INSS', 5000);
+    await esperar(page, 'text=CONSULTA INSS', 8000);
 
     // =========================
     // CPF
     // =========================
     console.log("🟡 Buscando CPF...");
 
-    await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
+    await esperar(page, 'input[placeholder="CPF / Benefício"]', 8000);
 
     await page.fill('input[placeholder="CPF / Benefício"]', cpf);
 
     await page.click('button:has-text("Consultar")', { force: true });
 
-    // =========================
-    // RESULTADO
-    // =========================
-    await esperar(page, 'text=Margem Total Disponível', 5000);
+    // 🔥 espera carregamento real
+    await page.waitForLoadState('networkidle');
+
+    // espera tabela correta aparecer
+    await esperar(page, 'table:has-text("Banco")', 10000);
+    await esperar(page, 'table:has-text("Banco") tbody tr', 10000);
 
     // =========================
     // CAPTURA DADOS
@@ -115,7 +117,6 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
           match[1].replace('.', '').replace(',', '.')
         );
       }
-
       return 0;
     }
 
@@ -124,22 +125,19 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     const rcc = extrairValor("Margem Disponível RCC");
 
     // =========================
-    // CONTRATOS (TABELA CORRETA)
+    // CONTRATOS (CORRETO)
     // =========================
-    console.log("📊 Localizando tabela correta...");
+    console.log("📊 Lendo contratos...");
 
-    const tabela = page.locator('table:has-text("Banco")').first();
-
-    await esperar(page, 'table:has-text("Banco") tbody tr', 5000);
-
-    const contratosRaw = await tabela.$$eval('tbody tr', rows =>
-      rows.map(row => {
-        const cols = Array.from(row.querySelectorAll('td')).map(td =>
-          td.innerText.trim()
-        );
-
-        return cols;
-      })
+    const contratosRaw = await page.$$eval(
+      'table:has-text("Banco") tbody tr',
+      rows =>
+        rows.map(row => {
+          const cols = Array.from(row.querySelectorAll('td')).map(td =>
+            td.innerText.trim()
+          );
+          return cols;
+        })
     );
 
     const parseMoney = (valor) => {
@@ -167,7 +165,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
       };
     });
 
-    // 🔥 FILTRO PRA LIMPAR SUJEIRA
+    // 🔥 filtro pra manter só contratos válidos
     const contratosFiltrados = contratos.filter(c =>
       c.banco.includes("BANCO") &&
       c.contrato &&
