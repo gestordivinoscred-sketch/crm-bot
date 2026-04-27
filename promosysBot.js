@@ -27,7 +27,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     // =========================
     console.log("🟡 Login...");
 
-    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 3000);
+    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 2000);
 
     await page.fill(
       'input[placeholder="Digite seu nome de usuário"]',
@@ -41,7 +41,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
 
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 3000 });
+    await page.waitForURL('**/consulta/**', { timeout: 2000 });
 
     // =========================
     // POPUP
@@ -72,7 +72,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     console.log("🔵 Selecionando INSS...");
 
     await page.click('text=INSS', { force: true });
-    await esperar(page, 'text=CONSULTA INSS', 5000);
+    await esperar(page, 'text=CONSULTA INSS', 3000);
 
 // =========================
 // TIPO DE BUSCA
@@ -82,7 +82,7 @@ const isTelefone = cpf.length >= 10;
 
 if (isTelefone) {
   console.log("📞 Buscando por TELEFONE...");
-  await page.click('text=Telefone');
+  await page.click('text=TELEFONE');
 } else {
   console.log("🆔 Buscando por CPF...");
   await page.click('text=CPF / Benefício');
@@ -91,7 +91,7 @@ if (isTelefone) {
 // 🔥 pega o input real visível (SEM placeholder)
 const input = page.locator('input:visible').first();
 
-await input.waitFor({ state: 'visible', timeout: 5000 });
+await input.waitFor({ state: 'visible', timeout: 3000 });
 
 // preenche
 await input.fill('');
