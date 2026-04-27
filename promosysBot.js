@@ -54,7 +54,6 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
         const style = window.getComputedStyle(el);
-
         if (
           (style.position === 'fixed' || style.position === 'absolute') &&
           parseInt(style.zIndex) > 1000
@@ -85,12 +84,30 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
 
     await page.click('button:has-text("Consultar")', { force: true });
 
-    // 🔥 espera carregamento real
+    // =========================
+    // 🔥 ESPERA + SCROLL (ESSENCIAL)
+    // =========================
     await page.waitForLoadState('networkidle');
 
-    // espera tabela correta aparecer
-    await esperar(page, 'table:has-text("Banco")', 10000);
-    await esperar(page, 'table:has-text("Banco") tbody tr', 10000);
+    // força scroll pra carregar tabela
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 500;
+
+        const timer = setInterval(() => {
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+
+          if (totalHeight >= document.body.scrollHeight) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 200);
+      });
+    });
+
+    await page.waitForTimeout(2000);
 
     // =========================
     // CAPTURA DADOS
@@ -125,19 +142,17 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     const rcc = extrairValor("Margem Disponível RCC");
 
     // =========================
-    // CONTRATOS (CORRETO)
+    // CONTRATOS (PEGANDO TABELA REAL)
     // =========================
     console.log("📊 Lendo contratos...");
 
-    const contratosRaw = await page.$$eval(
-      'table:has-text("Banco") tbody tr',
-      rows =>
-        rows.map(row => {
-          const cols = Array.from(row.querySelectorAll('td')).map(td =>
-            td.innerText.trim()
-          );
-          return cols;
-        })
+    const contratosRaw = await page.$$eval('table tbody tr', rows =>
+      rows.map(row => {
+        const cols = Array.from(row.querySelectorAll('td')).map(td =>
+          td.innerText.trim()
+        );
+        return cols;
+      })
     );
 
     const parseMoney = (valor) => {
@@ -165,7 +180,7 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
       };
     });
 
-    // 🔥 filtro pra manter só contratos válidos
+    // 🔥 filtro pra manter só contratos reais
     const contratosFiltrados = contratos.filter(c =>
       c.banco.includes("BANCO") &&
       c.contrato &&
