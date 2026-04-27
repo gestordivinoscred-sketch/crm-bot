@@ -177,7 +177,7 @@ await page.evaluate(() => window.scrollTo(0, 0));
     let atual = null;
 
     for (const linha of linhas) {
-const isBanco = /^\d+\s*-\s*/.test(linha) && linha.includes("BANCO");
+const isBanco = /^\d+\s*-\s*/.test(linha);
 
       if (isBanco) {
         if (atual) contratos.push(atual);
