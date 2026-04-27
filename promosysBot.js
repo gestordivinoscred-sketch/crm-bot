@@ -74,17 +74,25 @@ async function consultarPromosys(cpf, limiteParcela = 50) {
     await page.click('text=INSS', { force: true });
     await esperar(page, 'text=CONSULTA INSS', 5000);
 
-    // =========================
-    // CPF
-    // =========================
-    console.log("🟡 Buscando CPF...");
+  // =========================
+// TIPO DE BUSCA
+// =========================
+await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
 
-    await esperar(page, 'input[placeholder="CPF / Benefício"]', 5000);
+// 👇 DEFINE SE É CPF OU TELEFONE (AUTOMÁTICO)
+const isTelefone = cpf.length >= 10;
 
-    await page.fill('input[placeholder="CPF / Benefício"]', cpf);
+if (isTelefone) {
+  console.log("📞 Buscando por TELEFONE...");
+  await page.click('text=Telefone').catch(() => {});
+} else {
+  console.log("🆔 Buscando por CPF...");
+  await page.click('text=CPF / Benefício').catch(() => {});
+}
 
-    await page.click('button:has-text("Consultar")', { force: true });
-
+// limpa e preenche
+await page.fill('input[placeholder="CPF / Benefício"]', '');
+await page.fill('input[placeholder="CPF / Benefício"]', cpf);
     // =========================
     // RESULTADO
     // =========================
