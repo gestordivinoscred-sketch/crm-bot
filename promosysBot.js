@@ -20,7 +20,9 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
     console.log("🔵 Abrindo sistema...");
     await page.goto('https://sistemapromosys.com.br/', { waitUntil: 'networkidle' });
 
+    // =========================
     // LOGIN
+    // =========================
     console.log("🟡 Fazendo Login...");
     await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 5000);
     await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
@@ -29,7 +31,9 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
 
     await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
+    // =========================
     // LIMPEZA DE POPUPS
+    // =========================
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
         const style = window.getComputedStyle(el);
@@ -37,22 +41,29 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       });
     });
 
+    // =========================
     // NAVEGAÇÃO INSS
+    // =========================
     await page.click('text=INSS', { force: true });
     await esperar(page, 'button:has-text("Consultar")', 5000);
 
     const isTelefone = cpf.replace(/\D/g, '').length >= 10;
-    if (isTelefone) { await page.click('text=TELEFONE'); } 
-    else { await page.click('text=CPF / Benefício'); }
+    if (isTelefone) { 
+      await page.click('text=TELEFONE'); 
+    } else { 
+      await page.click('text=CPF / Benefício'); 
+    }
 
     const input = page.locator('input:visible').first();
     await input.fill(cpf);
     await page.click('button:has-text("Consultar")');
 
-    // Aguarda carregar dados
+    // Aguarda carregar dados principais
     await esperar(page, 'text=Margem Total Disponível', 10000);
 
+    // =========================
     // CAPTURA DADOS GERAIS (Nome e Margens)
+    // =========================
     const extrairDoTexto = await page.evaluate(() => {
       const corpo = document.body.innerText;
       const limpar = (v) => parseFloat(v.replace(/\./g, '').replace(',', '.')) || 0;
@@ -69,7 +80,9 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       };
     });
 
+    // =========================
     // EXTRAÇÃO DA TABELA DE CONTRATOS (LÓGICA BLINDADA)
+    // =========================
     console.log("📊 Localizando a tabela de contratos real...");
     const contratos = await page.evaluate(() => {
       const limparMoeda = (t) => {
@@ -78,7 +91,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
         return parseFloat(val) || 0;
       };
 
-      // Procura todas as tabelas e seleciona a que contém o cabeçalho de Quitação
+      // Procura a tabela que contém o cabeçalho financeiro
       const todasAsTabelas = Array.from(document.querySelectorAll('table'));
       const tabelaReal = todasAsTabelas.find(t => t.innerText.includes('Quitação') && t.innerText.includes('Banco'));
 
@@ -88,7 +101,7 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
       
       return rows.map(row => {
         const cols = row.querySelectorAll('td');
-        // Filtra linhas que não têm o número correto de colunas ou são cabeçalhos
+        // Filtra linhas que não têm colunas suficientes ou são o cabeçalho
         if (cols.length < 9 || cols[0].innerText.includes("Banco")) return null;
 
         const bancoNome = cols[0].innerText.trim();
@@ -102,3 +115,31 @@ async function consultarPromosys(cpf, limiteParcela = 0) {
           valorParcela: limparMoeda(cols[7]?.innerText),
           pagas: parseInt(cols[8]?.innerText.split('/')[0]) || 0,
           total: parseInt(cols[8]?.innerText.split('/')[1]) || 0,
+          quitacao: limparMoeda(cols[9]?.innerText) || limparMoeda(cols[9]?.querySelector('input')?.value)
+        };
+      }).filter(c => c !== null);
+    });
+
+    await browser.close();
+
+    // Retorno final para o Index
+    return {
+      ...extrairDoTexto,
+      totalContratos: contratos.length,
+      bancos: [...new Set(contratos.map(c => c.banco))],
+      parcelasAltas: contratos.filter(c => c.valorParcela > limiteParcela),
+      contratos 
+    };
+
+  } catch (err) {
+    console.log("❌ ERRO NO BOT:", err.message);
+    if (browser) await browser.close();
+    return { 
+      nome: "Erro na consulta", 
+      margem: 0, rmc: 0, rcc: 0, 
+      totalContratos: 0, bancos: [], parcelasAltas: [], contratos: [] 
+    };
+  }
+}
+
+module.exports = { consultarPromosys };
