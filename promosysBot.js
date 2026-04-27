@@ -8,7 +8,7 @@ async function esperar(page, selector, tempo) {
   }
 }
 
-async function consultarPromosys(cpf, limiteParcela = 50) {
+async function consultarPromosys(cpf, limiteParcela = 0) {
   const browser = await chromium.launch({
     headless: true
   });
