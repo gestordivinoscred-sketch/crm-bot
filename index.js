@@ -115,8 +115,8 @@ const PORT = process.env.PORT || 3199;
 app.listen(PORT, () => {
   console.log(`
   =========================================
-  🚀 API DIVINOS CRED RODANDO NA PORTA ${PORT}
-  🤖 Motor Playwright: Ativo
+  🚀 API DIVINOS CRED / PROMOSYS RODANDO NA PORTA ${PORT}
+  🤖 Playwright: Ativo
   =========================================
   `);
 });
