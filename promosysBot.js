@@ -10,259 +10,139 @@ async function esperar(page, selector, tempo) {
 
 async function consultarPromosys(cpf, limiteParcela = 0) {
   const browser = await chromium.launch({
-    headless: true
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   const page = await browser.newPage();
 
   try {
     console.log("🔵 Abrindo sistema...");
-
     await page.goto('https://sistemapromosys.com.br/', {
-      waitUntil: 'domcontentloaded'
+      waitUntil: 'networkidle'
     });
 
     // =========================
     // LOGIN
     // =========================
-    console.log("🟡 Login...");
+    console.log("🟡 Fazendo Login...");
+    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 5000);
 
-    await esperar(page, 'input[placeholder="Digite seu nome de usuário"]', 2000);
-
-    await page.fill(
-      'input[placeholder="Digite seu nome de usuário"]',
-      process.env.PROMOSYS_USER
-    );
-
-    await page.fill(
-      'input[placeholder="Digite sua senha"]',
-      process.env.PROMOSYS_PASS
-    );
-
+    await page.fill('input[placeholder="Digite seu nome de usuário"]', process.env.PROMOSYS_USER);
+    await page.fill('input[placeholder="Digite sua senha"]', process.env.PROMOSYS_PASS);
     await page.click('text=Acessar o sistema');
 
-    await page.waitForURL('**/consulta/**', { timeout: 2000 });
+    await page.waitForURL('**/consulta/**', { timeout: 10000 });
 
     // =========================
-    // POPUP
+    // LIMPEZA DE POPUPS
     // =========================
-    console.log("🟡 Fechando popup...");
-
-    await page.click('text=×').catch(() => {});
-    await page.click('[class*="close"]').catch(() => {});
-
+    console.log("🟡 Limpando interface...");
     await page.evaluate(() => {
       document.querySelectorAll('div').forEach(el => {
         const style = window.getComputedStyle(el);
-
-        if (
-          (style.position === 'fixed' || style.position === 'absolute') &&
-          parseInt(style.zIndex) > 1000
-        ) {
-          el.remove();
-        }
+        if (parseInt(style.zIndex) > 1000) el.remove();
       });
     });
 
-    console.log("🟢 Popup limpo");
-
     // =========================
-    // INSS
+    // NAVEGAÇÃO ATÉ INSS
     // =========================
-    console.log("🔵 Selecionando INSS...");
-
     await page.click('text=INSS', { force: true });
-    await esperar(page, 'text=CONSULTA INSS', 3000);
+    await esperar(page, 'button:has-text("Consultar")', 5000);
 
-// =========================
-// TIPO DE BUSCA
-// =========================
-
-const isTelefone = cpf.length >= 10;
-
-if (isTelefone) {
-  console.log("📞 Buscando por TELEFONE...");
-  await page.click('text=TELEFONE');
-} else {
-  console.log("🆔 Buscando por CPF...");
-  await page.click('text=CPF / Benefício');
-}
-
-// 🔥 pega o input real visível (SEM placeholder)
-const input = page.locator('input:visible').first();
-
-await input.waitFor({ state: 'visible', timeout: 3000 });
-
-// preenche
-await input.fill('');
-await input.fill(cpf);
-
-// 🔥 ESSENCIAL → EXECUTA CONSULTA
-await page.click('button:has-text("Consultar")');
-
-// =========================
-// RESULTADO
-// =========================
-await esperar(page, 'text=Margem Total Disponível', 3000);
-
-    // =========================
-    // CAPTURA DADOS
-    // =========================
-    console.log("🟠 Capturando dados...");
-
-    const textoTopo = await page.locator('body').innerText();
-
-    let nome = "Não encontrado";
-
-    const matchNome = textoTopo.match(/Nome:\s*(.*)/);
-    if (matchNome) {
-      nome = matchNome[1].split('\n')[0].trim();
+    // TIPO DE BUSCA (CPF ou Telefone)
+    const isTelefone = cpf.replace(/\D/g, '').length >= 10;
+    if (isTelefone) {
+      await page.click('text=TELEFONE');
+    } else {
+      await page.click('text=CPF / Benefício');
     }
 
-    console.log("👤 Nome:", nome);
+    const input = page.locator('input:visible').first();
+    await input.fill(cpf);
+    await page.click('button:has-text("Consultar")');
 
-   console.log("📜 Fazendo scroll completo...");
-
-await page.evaluate(async () => {
-  await new Promise(resolve => {
-    let totalHeight = 0;
-    const distance = 500;
-
-    const timer = setInterval(() => {
-      window.scrollBy(0, distance);
-      totalHeight += distance;
-
-      if (totalHeight >= document.body.scrollHeight) {
-        clearInterval(timer);
-        resolve();
-      }
-    }, 200);
-  });
-});
-
-// aguarda carregar tudo
-await page.waitForTimeout(1500);
-
-// volta pro topo
-await page.evaluate(() => window.scrollTo(0, 0));
-
-    const texto = await page.locator('body').innerText();
-
-    function extrairValor(label) {
-      const regex = new RegExp(label + "\\s*R\\$\\s?([\\d.,]+)");
-      const match = texto.match(regex);
-
-      if (match) {
-        return parseFloat(
-          match[1].replace('.', '').replace(',', '.')
-        );
-      }
-
-      return 0;
-    }
-
-    const margem = extrairValor("Margem Total Disponível");
-    const rmc = extrairValor("Margem Disponível RMC");
-    const rcc = extrairValor("Margem Disponível RCC");
+    // Aguarda os dados carregarem
+    await esperar(page, 'text=Margem Total Disponível', 10000);
 
     // =========================
-    // CONTRATOS
+    // CAPTURA DADOS GERAIS
     // =========================
-    const linhas = texto
-      .split("\n")
-      .map(l => l.trim())
-      .filter(Boolean);
+    console.log("🟠 Capturando Margens e Nome...");
+    
+    const extrairDoTexto = await page.evaluate(() => {
+      const corpo = document.body.innerText;
+      const limpar = (v) => parseFloat(v.replace(/\./g, '').replace(',', '.')) || 0;
+      
+      const nomeMatch = corpo.match(/Nome:\s*(.*)/);
+      const margemMatch = corpo.match(/Margem Total Disponível\s*R\$\s?([\d.,]+)/);
+      const rmcMatch = corpo.match(/Margem Disponível RMC\s*R\$\s?([\d.,]+)/);
+      const rccMatch = corpo.match(/Margem Disponível RCC\s*R\$\s?([\d.,]+)/);
 
-    const contratos = [];
-    let atual = null;
+      return {
+        nome: nomeMatch ? nomeMatch[1].split('\n')[0].trim() : "Não encontrado",
+        margem: margemMatch ? limpar(margemMatch[1]) : 0,
+        rmc: rmcMatch ? limpar(rmcMatch[1]) : 0,
+        rcc: rccMatch ? limpar(rccMatch[1]) : 0
+      };
+    });
 
-    for (const linha of linhas) {
-const isBanco = /^\d+\s*-\s*/.test(linha);
+    // =========================
+    // EXTRAÇÃO DA TABELA DE CONTRATOS
+    // =========================
+    console.log("📊 Extraindo Tabela de Contratos...");
+    
+    const contratos = await page.evaluate(() => {
+      // Procura a tabela que contém os contratos (geralmente a que tem "Averbação" ou "Quitação")
+      const rows = Array.from(document.querySelectorAll('table tr')).slice(1);
+      
+      const limparMoeda = (t) => {
+        if (!t) return 0;
+        let val = t.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+        return parseFloat(val) || 0;
+      };
 
-      if (isBanco) {
-        if (atual) contratos.push(atual);
+      return rows.map(row => {
+        const cols = row.querySelectorAll('td');
+        if (cols.length < 9) return null;
 
-        atual = {
-          banco: linha,
-          valorParcela: 0,
-          taxa: "",
-          pagas: 0,
-          total: 0
+        return {
+          banco: cols[0]?.innerText.trim(),
+          contrato: cols[1]?.innerText.trim(),
+          valorContrato: limparMoeda(cols[5]?.innerText),
+          taxa: cols[6]?.innerText.trim(),
+          valorParcela: limparMoeda(cols[7]?.innerText),
+          pagas: parseInt(cols[8]?.innerText.split('/')[0]) || 0,
+          total: parseInt(cols[8]?.innerText.split('/')[1]) || 0,
+          quitacao: limparMoeda(cols[9]?.innerText) || limparMoeda(cols[9]?.querySelector('input')?.value)
         };
-      }
-
-      if (!atual) continue;
-
-      if (linha.includes("R$") && !linha.includes("Contrato")) {
-        const match = linha.match(/R\$ ?([\d.,]+)/);
-
-        if (match) {
-          const valor = parseFloat(
-            match[1].replace(/\./g, '').replace(',', '.')
-          );
-
-          if (valor < 10000) atual.valorParcela = valor;
-        }
-      }
-
-      if (linha.includes("%")) {
-        const match = linha.match(/([\d.,]+)%/);
-
-        if (match) atual.taxa = match[1] + "%";
-      }
-
-      if (linha.includes("/") && linha.includes("-")) {
-        const match = linha.match(/(\d+)\/(\d+)/);
-
-        if (match) {
-          atual.pagas = parseInt(match[1]);
-          atual.total = parseInt(match[2]);
-        }
-      }
-    }
-
-    if (atual) contratos.push(atual);
-
-    const totalContratos = contratos.length;
-    const bancos = [...new Set(contratos.map(c => c.banco))];
-    const parcelasAltas = contratos.filter(
-      c => c.valorParcela > limiteParcela
-    );
-
-    console.log("💰 Margem:", margem);
-    console.log("💳 RMC:", rmc);
-    console.log("🏦 RCC:", rcc);
-    console.log("📊 Contratos:", totalContratos);
+      }).filter(c => c !== null && c.banco !== "");
+    });
 
     await browser.close();
 
+    // Organiza os bancos únicos e parcelas altas
+    const bancosUnicos = [...new Set(contratos.map(c => c.banco))];
+    const parcelasAltas = contratos.filter(c => c.valorParcela > limiteParcela);
+
     return {
-      nome,
-      margem,
-      rmc,
-      rcc,
-      totalContratos,
-      bancos,
-      parcelasAltas
+      ...extrairDoTexto,
+      totalContratos: contratos.length,
+      bancos: bancosUnicos,
+      parcelasAltas,
+      contratos // Retorna a lista completa para o index.js
     };
 
   } catch (err) {
-    await browser.close();
-
     console.log("❌ ERRO NO BOT:", err.message);
-
+    if (browser) await browser.close();
     return {
-      nome: null,
-      margem: 0,
-      rmc: 0,
-      rcc: 0,
-      totalContratos: 0,
-      bancos: [],
-      parcelasAltas: []
+      nome: "Erro na consulta",
+      margem: 0, rmc: 0, rcc: 0,
+      totalContratos: 0, bancos: [], parcelasAltas: [], contratos: []
     };
   }
 }
 
-module.exports = {
-  consultarPromosys
-};
+module.exports = { consultarPromosys };
