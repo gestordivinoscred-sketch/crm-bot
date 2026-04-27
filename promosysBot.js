@@ -89,7 +89,7 @@ if (isTelefone) {
 
   await page.click('text=Telefone');
 
-  seletorInput = 'input[placeholder="Telefone"]';
+  seletorInput = 'input[placeholder="TELEFONE"]';
 
 } else {
   console.log("🆔 Buscando por CPF...");
